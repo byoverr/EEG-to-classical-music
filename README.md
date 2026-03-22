@@ -1,11 +1,10 @@
 # EEG-to-Classical-Music
 
-> **Дипломная работа СПбГЭТУ "ЛЭТИ"**  
 > *"Методы преобразования сигналов ЭЭГ в музыкальные структуры и их сравнение с классическими произведениями"*
 
 ---
 
-## 📋 Описание
+##  Описание
 
 Проект реализует полный pipeline для преобразования сигналов электроэнцефалограммы (ЭЭГ) в музыкальные MIDI-последовательности и их сравнения с классическими произведениями из датасета MAESTRO.
 
@@ -22,7 +21,7 @@
 
 ---
 
-## 🏗️ Архитектура
+##  Архитектура
 
 ```
 EEG-to-classical-music/
@@ -52,7 +51,7 @@ EEG-to-classical-music/
 
 ---
 
-## 🔬 Методология
+##  Методология
 
 ### 1. Детекция волновых мотивов (Destexhe & Foubert, 2022)
 
@@ -108,7 +107,7 @@ combined_similarity = (
 
 ---
 
-## ⚙️ Установка
+##  Установка
 
 ### Требования
 - Python 3.8+
@@ -149,7 +148,7 @@ pip install seaborn
 
 ---
 
-## 🚀 Использование
+##  Использование
 
 ### Базовый запуск
 
@@ -215,15 +214,15 @@ python scripts/emotion_feature_report.py
 
 ---
 
-## 📊 Выходные данные
+##  Выходные данные
 
 ### HTML отчёт
 
 Интерактивный отчёт с:
-- 🎵 Встроенными аудио-плеерами (EEG, Classical, Comparison)
-- 📈 Метриками сходства
-- 📋 Эмоциональными метками (Valence, Arousal)
-- 🎹 Визуализацией фрагментов
+-  Встроенными аудио-плеерами (EEG, Classical, Comparison)
+-  Метриками сходства
+-  Эмоциональными метками (Valence, Arousal)
+-  Визуализацией фрагментов
 
 ### MIDI файлы
 
@@ -237,7 +236,7 @@ data/best_matches/
 
 ---
 
-## 📚 Датасеты
+##  Датасеты
 
 ### DEAP Dataset
 - **Источник**: Queen Mary University of London
@@ -272,7 +271,7 @@ USE_PSEUDO_LABELING = True
 
 ---
 
-## 🧪 Метрики качества
+##  Метрики качества
 
 | Метрика | Описание | Диапазон |
 |---------|----------|----------|
@@ -284,7 +283,7 @@ USE_PSEUDO_LABELING = True
 
 ---
 
-## 📖 Ссылки
+##  Ссылки
 
 1. **Destexhe, A., & Foubert, B.** (2022). *Listening to the brain: Sonification of EEG, LFP and Spiking activity*. bioRxiv.
 
@@ -292,19 +291,6 @@ USE_PSEUDO_LABELING = True
 
 3. **Miranda, E. R.** (2010). *Brain-Computer Music Interface for Composition and Performance*. International Journal on Disability and Human Development.
 
----
-
-## 📄 Лицензия
-
-MIT License
-
----
-
-## 👤 Автор
-
-**Студент СПбГЭТУ "ЛЭТИ"**  
-Факультет компьютерных технологий и информатики (ФКТИ)  
-2025
 
 
 
