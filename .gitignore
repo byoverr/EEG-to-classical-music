@@ -31,6 +31,7 @@ MANIFEST
 #  before PyInstaller builds the exe, so as to inject date/other infos into it.
 *.manifest
 *.spec
+!eeg_app.spec
 
 # Installer logs
 pip-log.txt
@@ -77,6 +78,21 @@ target/
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# macOS / local clutter
+.DS_Store
+
+# Generated project artifacts
+runs/
+data/best_matches/
+data/reports/
+data/maestro-v3.0.0/
+data/EMOPIA_1.0/
+data/deap_dataset/
+data/FluidR3_GM.sf2
+*.mid
+*.wav
+*.bak
 
 # IPython
 profile_default/
@@ -173,7 +189,7 @@ cython_debug/
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+.idea/
 
 # Abstra
 # Abstra is an AI-powered process automation framework.
@@ -186,7 +202,7 @@ cython_debug/
 #  that can be found at https://github.com/github/gitignore/blob/main/Global/VisualStudioCode.gitignore
 #  and can be added to the global gitignore or merged into this file. However, if you prefer, 
 #  you could uncomment the following to ignore the entire vscode folder
-# .vscode/
+.vscode/
 
 # Ruff stuff:
 .ruff_cache/
