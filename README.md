@@ -232,6 +232,7 @@ runs/run_018/
 
 ![Upload / Start](docs/images/upload-start.png)
 ![Best Matches](docs/images/best-matches.png)
+![Transformations](docs/images/preobr.png)
 ![Emotion Analysis](docs/images/emotion-analysis.png)
 ![Summary / Insights](docs/images/summary-insights.png)
 
