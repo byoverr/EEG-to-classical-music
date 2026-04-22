@@ -128,7 +128,7 @@ def prepare_signal_data(participant_data: dict, trial_idx: int) -> dict:
     
     # 3. Создаем PCA версию (снижаем размерность до 1 главной компоненты)
     # pca_transform принимает (channels, time) и возвращает (n_components, time)
-    pca_eeg = pca_transform(raw_eeg, n_components=1)
+    pca_eeg = pca_transform(raw_eeg, n_components=3)
     
     return {
         'original': raw_eeg,

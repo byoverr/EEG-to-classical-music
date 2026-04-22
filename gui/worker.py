@@ -57,12 +57,14 @@ class PipelineWorker(QThread):
         top_k: int = 10,
         n_jobs: Optional[int] = None,
         only_emopia: bool = False,
+        dataset_source: Optional[str] = None,
         match_emotions: bool = False,
         analysis_mode: str = "single",
         window_size: float = 4.0,
         hop_size: float = 2.0,
         max_seconds: Optional[float] = None,
         eeg_emotions: Optional[dict[str, str | None]] = None,
+        seed: Optional[int] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -72,13 +74,21 @@ class PipelineWorker(QThread):
         self.max_classical = max_classical
         self.top_k = top_k
         self.n_jobs = n_jobs
-        self.only_emopia = only_emopia
+        # dataset_source приоритетнее, но если не задан — читаем из only_emopia для обратной совместимости.
+        # Значения: "both" | "emopia" | "maestro"
+        if dataset_source is None:
+            dataset_source = "emopia" if only_emopia else "both"
+        if dataset_source not in ("both", "emopia", "maestro"):
+            dataset_source = "both"
+        self.dataset_source = dataset_source
+        self.only_emopia = (dataset_source == "emopia")
         self.match_emotions = match_emotions
         self.analysis_mode = analysis_mode
         self.window_size = window_size
         self.hop_size = hop_size
         self._max_seconds = max_seconds
         self._eeg_emotions = eeg_emotions or {}  # {filepath: emotion_str | None}
+        self.seed = seed
         self._cancelled = False
 
     # ------------------------------------------------------------------
@@ -134,8 +144,9 @@ class PipelineWorker(QThread):
             DEAP_DIR, MAESTRO_DIR, EMOPIA_DIR,
             EEG_THRESHOLD_LOW_STD, EEG_THRESHOLD_HIGH_STD,
             EEG_MIN_WAVE_DURATION, EEG_MAX_WAVE_DURATION, EEG_SCALE_KEY,
-            USE_EMOPIA, EMOPIA_MAX_TRACKS, RUNS_DIR, USE_PSEUDO_LABELING,
+            EMOPIA_MAX_TRACKS, RUNS_DIR, USE_PSEUDO_LABELING,
             MATCH_FRAGMENT_DURATION, MAESTRO_PSEUDO_LABELS_PATH,
+            RANDOM_SEED,
         )
         from src.deap_loader import load_deap_participant_data, get_emotion_labels
         from src.maestro_loader import get_maestro_midi_files, get_maestro_metadata
@@ -164,10 +175,15 @@ class PipelineWorker(QThread):
             save_hypothesis_artifacts,
         )
 
-        # Переопределяем размеры окна из параметров GUI
-        import src.config as _cfg
-        _cfg.COMPARISON_WINDOW_SIZE = self.window_size
-        _cfg.COMPARISON_HOP_SIZE = self.hop_size
+        # Параметры окна/хопа передаём через локальные переменные ниже.
+        # НЕ пишем в src.config — глобальная мутация ломает параллельные прогоны.
+
+        # --- Фиксация seed для воспроизводимости (shuffle и np.random) ---
+        effective_seed = int(self.seed) if self.seed is not None else int(RANDOM_SEED)
+        random.seed(effective_seed)
+        np.random.seed(effective_seed)
+        self._log(f"Seed: {effective_seed}")
+        self._log(f"Источник классики: {self.dataset_source}")
 
         # Вспомогательные, скопированы из run_comparison.py -----------------
         from scripts.run_comparison import (
@@ -189,21 +205,33 @@ class PipelineWorker(QThread):
         report_dir = run_dir / "report"
         report_dir.mkdir(parents=True, exist_ok=True)
 
+        # Делим лимит между датасетами, если берём оба источника
+        use_maestro = self.dataset_source in ("both", "maestro")
+        use_emopia = self.dataset_source in ("both", "emopia")
+        if self.dataset_source == "both":
+            # поровну, остаток — в maestro
+            emopia_limit = self.max_classical // 2
+            maestro_limit = self.max_classical - emopia_limit
+        elif self.dataset_source == "emopia":
+            emopia_limit, maestro_limit = self.max_classical, 0
+        else:  # "maestro"
+            emopia_limit, maestro_limit = 0, self.max_classical
+
         maestro_files: list[str] = []
-        if not self.only_emopia:
+        if use_maestro and maestro_limit > 0:
             self._log("[MAESTRO] Загрузка…")
             all_maestro = get_maestro_midi_files(str(MAESTRO_DIR), max_files=None)
             random.shuffle(all_maestro)
-            maestro_files = all_maestro[: self.max_classical]
+            maestro_files = all_maestro[: maestro_limit]
             self._log(f"[MAESTRO] {len(maestro_files)} произведений")
 
         emopia_files: list[str] = []
-        if USE_EMOPIA or self.only_emopia:
+        if use_emopia and emopia_limit > 0:
             try:
                 self._log("[EMOPIA] Загрузка…")
                 all_emopia = get_emopia_midi_files(str(EMOPIA_DIR), max_files=EMOPIA_MAX_TRACKS)
                 random.shuffle(all_emopia)
-                emopia_files = all_emopia[: self.max_classical]
+                emopia_files = all_emopia[: emopia_limit]
                 self._log(f"[EMOPIA] {len(emopia_files)} произведений")
             except Exception as e:
                 self._log(f"[EMOPIA] Ошибка: {e}")
@@ -429,16 +457,11 @@ class PipelineWorker(QThread):
         _rc._classical_meta_map = classical_meta_map
 
         if n_jobs > 1 and total_tasks > 1:
+            # ThreadPoolExecutor: threads share _classical_cache in memory — no spawn/pickling issues
+            from concurrent.futures import ThreadPoolExecutor
             completed_t = 0
-            with ProcessPoolExecutor(
-                max_workers=n_jobs,
-                initializer=_init_worker,
-                initargs=(classical_windows_cache, classical_dict, classical_meta_map),
-            ) as executor:
-                futures = {
-                    executor.submit(_process_trial, task): task
-                    for task in trial_tasks
-                }
+            with ThreadPoolExecutor(max_workers=min(n_jobs, total_tasks)) as executor:
+                futures = {executor.submit(_process_trial, task): task for task in trial_tasks}
                 for future in as_completed(futures):
                     pid, tidx, results, error = future.result()
                     completed_t += 1
@@ -520,7 +543,7 @@ class PipelineWorker(QThread):
         results_df = add_hypothesis_scores(results_df)
         ranking_col = "music_match_score" if "music_match_score" in results_df.columns else "combined_similarity"
         if ranking_col in results_df.columns:
-            results_df = results_df.sort_values([ranking_col, "cemms_score"], ascending=[False, False]).reset_index(drop=True)
+            results_df = results_df.sort_values(ranking_col, ascending=False).reset_index(drop=True)
 
         csv_path = report_dir / "comparison_results.csv"
         results_df.to_csv(csv_path, index=False)
@@ -532,14 +555,30 @@ class PipelineWorker(QThread):
             analysis_mode=self.analysis_mode,
         )
         save_hypothesis_artifacts(report_dir, metrics, confusion, cohort_df, feature_summary)
+
+        # ── Group Analysis (этапы 3-4: группировка по эмоциям) ──
+        try:
+            from src.group_analysis import compute_group_profiles, save_group_analysis_artifacts
+            self._log("Групповой анализ по эмоциям…")
+            group_data = compute_group_profiles(results_df, top_k=self.top_k)
+            if group_data:
+                ga_files = save_group_analysis_artifacts(report_dir, group_data)
+                self._log(f"Group analysis: {len(ga_files)} artifacts saved")
+                for emo in group_data.get("emotions", []):
+                    n = group_data["n_per_emotion"].get(emo, 0)
+                    works = group_data.get("top_works_by_emotion", {}).get(emo, [])
+                    top_work = works[0]["title"] if works else "—"
+                    self._log(f"  {emo} (n={n}): top work = {top_work}")
+        except Exception as e:
+            self._log(f"Group analysis warning: {e}")
+
         if metrics:
             self._log(
                 "Emotion metrics: "
                 f"music={metrics.get('best_music_match_score', 0.0):.3f}, "
                 f"match={metrics.get('emotion_match_rate', 0.0):.3f}, "
                 f"top_k={metrics.get('top_k_accuracy', 0.0):.3f}, "
-                f"macro_f1={metrics.get('macro_f1', 0.0):.3f}, "
-                f"cemms={metrics.get('best_cemms_score', 0.0):.3f}"
+                f"macro_f1={metrics.get('macro_f1', 0.0):.3f}"
             )
 
         top_results = results_df.head(self.top_k)
@@ -567,7 +606,7 @@ class PipelineWorker(QThread):
         if all(c in comp_df.columns for c in dedup_cols):
             sort_col = "music_match_score" if "music_match_score" in comp_df.columns else "combined_similarity"
             if sort_col in comp_df.columns:
-                comp_df = comp_df.sort_values([sort_col, "cemms_score"], ascending=[False, False])
+                comp_df = comp_df.sort_values(sort_col, ascending=False)
             comp_df = comp_df.drop_duplicates(subset=dedup_cols, keep="first")
 
         # Сохраняем display_results.json (включая pitches и MIDI пути)
@@ -663,7 +702,16 @@ class PipelineWorker(QThread):
                 continue
 
             def _prepare_analysis_signal(raw_signal: np.ndarray) -> np.ndarray:
-                sig = np.nan_to_num(raw_signal, nan=0.0, posinf=0.0, neginf=0.0).astype(float)
+                raw = np.asarray(raw_signal)
+                bad_mask = ~np.isfinite(raw)
+                bad_count = int(bad_mask.sum())
+                if bad_count > 0:
+                    # Сигналим, что в сыром сигнале были NaN/Inf — это маскировка проблем препроцессинга.
+                    self._log(
+                        f"  [warn] заменено {bad_count} NaN/Inf из {raw.size} "
+                        f"отсчётов ({bad_count / max(raw.size, 1):.1%})"
+                    )
+                sig = np.nan_to_num(raw, nan=0.0, posinf=0.0, neginf=0.0).astype(float)
                 sig = sig - np.median(sig)
                 baseline_window = max(5, min(int(srate * 0.5), max(5, len(sig) // 20)))
                 kernel = np.ones(baseline_window, dtype=float) / float(baseline_window)
@@ -832,7 +880,7 @@ class PipelineWorker(QThread):
             variants = {
                 "original": composite_original,
                 "smoothed": composite_smoothed,
-                "pca": signal_data["pca"],
+                "pca": _build_multichannel_composite(signal_data["pca"], 0),
             }
 
             COMPARISON_WINDOW_SIZE = self.window_size
@@ -855,8 +903,7 @@ class PipelineWorker(QThread):
 
                 # Извлекаем 1D сигнал
                 if sig_arr.ndim > 1:
-                    channel_idx = 0 if variant_name == "pca" else min(best_channel_idx, sig_arr.shape[0] - 1)
-                    analysis_signal = sig_arr[channel_idx, :]
+                    analysis_signal = sig_arr[0, :]
                 else:
                     analysis_signal = sig_arr
                 analysis_signal = _prepare_analysis_signal(analysis_signal)
@@ -906,6 +953,22 @@ class PipelineWorker(QThread):
                 except Exception as e:
                     self._log(f"  {variant_name}: ошибка создания MIDI: {e}")
                     continue
+
+                # --- Снимок сигнала и мотивов для вкладки «Преобразование» ---
+                try:
+                    self._save_signal_snapshot(
+                        report_dir=eeg_midi_dir.parent / "report",
+                        participant_id=participant_id,
+                        variant_name=variant_name,
+                        signal=analysis_signal,
+                        fs=float(srate),
+                        motifs=motifs,
+                        threshold_low_std=float(EEG_THRESHOLD_LOW_STD),
+                        threshold_high_std=float(EEG_THRESHOLD_HIGH_STD),
+                        midi_path=str(midi_path),
+                    )
+                except Exception as e:
+                    self._log(f"  {variant_name}: не удалось сохранить snapshot: {e}")
 
                 # Извлекаем окна из EEG MIDI
                 try:
@@ -1097,8 +1160,7 @@ class PipelineWorker(QThread):
                         vdf = vdf[vdf["eeg_note_count"] >= 5]
                     if vdf.empty:
                         continue
-                    top_k = 5
-                    best = vdf.nlargest(top_k, "combined_similarity")
+                    best = vdf.nlargest(self.top_k, "combined_similarity")
                     for _, row in best.iterrows():
                         all_results.append({
                             "participant_id": participant_id,
@@ -1107,6 +1169,7 @@ class PipelineWorker(QThread):
                             "valence": 5.0,
                             "arousal": 5.0,
                             "eeg_emotion": _user_eeg_emotion,
+                            "eeg_source_file": eeg_path.name,
                             "eeg_midi": str(midi_path),
                             "eeg_recording_duration_sec": float(recording_duration_sec),
                             "eeg_raw_event_span_sec": float(raw_span),
@@ -1385,6 +1448,7 @@ class PipelineWorker(QThread):
 
             comp_rows.append({
                 "file": cla_mid_out.name,
+                "eeg_source_file": str(row.get("eeg_source_file") or ""),
                 "eeg_midi_path": str(eeg_mid_out),
                 "classical_midi_path": str(cla_mid_out),
                 "comparison_midi_path": str(cmp_mid_out),
@@ -1401,7 +1465,6 @@ class PipelineWorker(QThread):
                 "emotion_match": row.get("emotion_match", None),
                 "combined_similarity": float(row.get("combined_similarity", 0.0)),
                 "music_match_score": float(row.get("music_match_score", row.get("combined_similarity", 0.0))),
-                "cemms_score": float(row.get("cemms_score", row.get("combined_similarity", 0.0))),
                 "emotion_agreement_score": float(row.get("emotion_agreement_score", 0.0)),
                 "feature_similarity_score": float(row.get("feature_similarity_score", 0.0)),
                 "fragment_alignment_score": float(row.get("fragment_alignment_score", row.get("combined_similarity", 0.0))),
@@ -1434,6 +1497,80 @@ class PipelineWorker(QThread):
         return comp_rows
 
     # ------------------------------------------------------------------
+    def _save_signal_snapshot(
+        self,
+        report_dir: Path,
+        participant_id: str,
+        variant_name: str,
+        signal,
+        fs: float,
+        motifs: list,
+        threshold_low_std: float,
+        threshold_high_std: float,
+        midi_path: str,
+    ) -> None:
+        """
+        Сохраняет снимок EEG-сигнала и детектированных мотивов в report_dir/signal_snapshots/
+        для последующей визуализации на вкладке «Преобразование».
+        Сигнал прореживается до ~2500 точек чтобы JSON оставался лёгким.
+        """
+        import json as _json
+        import numpy as _np
+
+        report_dir = Path(report_dir)
+        snap_dir = report_dir / "signal_snapshots"
+        snap_dir.mkdir(parents=True, exist_ok=True)
+
+        sig = _np.asarray(signal, dtype=float).ravel()
+        if sig.size == 0 or fs <= 0:
+            return
+
+        duration_sec = float(sig.size) / float(fs)
+        signal_std = float(_np.std(sig)) if sig.size > 1 else 0.0
+        signal_mean = float(_np.mean(sig))
+
+        # Прореживание до MAX_POINTS точек, равномерно по времени.
+        MAX_POINTS = 2500
+        if sig.size > MAX_POINTS:
+            idx = _np.linspace(0, sig.size - 1, MAX_POINTS).astype(int)
+            sig_down = sig[idx]
+            t_down = (idx / float(fs)).tolist()
+        else:
+            sig_down = sig
+            t_down = (_np.arange(sig.size) / float(fs)).tolist()
+
+        motifs_out = []
+        for m in motifs or []:
+            motifs_out.append({
+                "onset_time": float(m.get("onset_time", 0.0)),
+                "peak_time": float(m.get("peak_time", 0.0)),
+                "duration": float(m.get("duration", 0.0)),
+                "peak_amplitude": float(m.get("peak_amplitude", 0.0)),
+                "rise_time": float(m.get("rise_time", 0.0)),
+            })
+
+        payload = {
+            "participant_id": str(participant_id),
+            "variant": str(variant_name),
+            "fs": float(fs),
+            "duration_sec": duration_sec,
+            "n_samples": int(sig.size),
+            "signal_mean": signal_mean,
+            "signal_std": signal_std,
+            "time": [float(x) for x in t_down],
+            "signal": [float(x) for x in sig_down],
+            "motifs": motifs_out,
+            "motif_count": len(motifs_out),
+            "threshold_low_std": float(threshold_low_std),
+            "threshold_high_std": float(threshold_high_std),
+            "midi_path": str(midi_path),
+        }
+        out_path = snap_dir / f"{participant_id}_{variant_name}.json"
+        try:
+            out_path.write_text(_json.dumps(payload), encoding="utf-8")
+        except Exception as e:
+            self._log(f"  snapshot: ошибка записи {out_path.name}: {e}")
+
     def _export_charts(self, results_df: pd.DataFrame, report_dir: Path):
         """Экспорт итоговых графиков (PNG) и CSV."""
         import matplotlib
@@ -1447,7 +1584,7 @@ class PipelineWorker(QThread):
 
         # --- 1) Main score chart (top-K, music-first) ---
         try:
-            top = results_df.sort_values([ranking_col, "cemms_score"], ascending=[False, False]).head(self.top_k).copy() \
+            top = results_df.sort_values(ranking_col, ascending=False).head(self.top_k).copy() \
                 if ranking_col in results_df.columns else results_df.head(self.top_k).copy()
             if top.empty:
                 return
@@ -1459,7 +1596,7 @@ class PipelineWorker(QThread):
             )
 
             fig, ax = plt.subplots(figsize=(12, max(6, len(top) * 0.5)))
-            metrics = [ranking_col, "cemms_score", "emotion_agreement_score", "feature_similarity_score"]
+            metrics = [ranking_col, "emotion_agreement_score", "feature_similarity_score"]
             avail = [m for m in metrics if m in top.columns]
             top_plot = top[avail + ["label"]].set_index("label")
             top_plot.plot.barh(ax=ax, width=0.7)
@@ -1500,7 +1637,7 @@ class PipelineWorker(QThread):
                 [c for c in [
                     "participant_id", "trial_idx", "variant", "eeg_emotion",
                     "classical_piece", "classical_dataset", "classical_emotion",
-                    "music_match_score", "combined_similarity", "cemms_score", "emotion_agreement_score",
+                    "music_match_score", "combined_similarity", "emotion_agreement_score",
                     "feature_similarity_score", "fragment_alignment_score",
                 ] if c in results_df.columns]
             ]
@@ -1518,7 +1655,7 @@ class PipelineWorker(QThread):
 
         report_dir = Path(report_dir)
         ranking_col = "music_match_score" if "music_match_score" in results_df.columns else "combined_similarity"
-        ranked = results_df.sort_values([ranking_col, "cemms_score"], ascending=[False, False]).reset_index(drop=True) \
+        ranked = results_df.sort_values(ranking_col, ascending=False).reset_index(drop=True) \
             if ranking_col in results_df.columns else results_df.reset_index(drop=True)
 
         diagnostics_rows = []

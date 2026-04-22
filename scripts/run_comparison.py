@@ -89,7 +89,7 @@ def detect_events_robust(signal_array: np.ndarray, fs: float):
     )
 
 
-def create_eeg_variants(signal_data: dict, output_dir: Path, 
+def create_eeg_variants(signal_data: dict, output_dir: Path,
                        participant_id: str, trial_idx: int,
                        reuse: bool = None) -> dict:
     """
@@ -98,7 +98,7 @@ def create_eeg_variants(signal_data: dict, output_dir: Path,
     Варианты:
     - original: из Fp1 канала (фронтальный, наиболее информативный)
     - smoothed: из сглаженного Fp1
-    - pca: из первой главной компоненты
+    - pca: из первых трёх главных компонент (первая используется для sonification)
     
     Использует параметры из config.py для детекции волн.
     Если reuse=True, пропускает генерацию для уже существующих файлов.
@@ -130,7 +130,7 @@ def create_eeg_variants(signal_data: dict, output_dir: Path,
         # Извлекаем 1D сигнал правильно
         if signal_array.ndim > 1:
             if variant_name == 'pca':
-                # PCA: первая компонента
+                # PCA: первая из трёх главных компонент
                 analysis_signal = signal_array[0, :]
             else:
                 # Original/Smoothed: используем Fp1 (канал 0) вместо среднего
@@ -257,12 +257,11 @@ def _process_trial(args):
         
         signal_data = prepare_signal_data(data, trial_idx)
         
-        # Создаём варианты MIDI
         eeg_midi_paths = create_eeg_variants(
-            signal_data, 
+            signal_data,
             eeg_midi_dir,
-            participant_id, 
-            trial_idx
+            participant_id,
+            trial_idx,
         )
         
         if not eeg_midi_paths:
@@ -501,6 +500,7 @@ def _process_trial(args):
                             'valence': valence,
                             'arousal': arousal,
                             'eeg_emotion': eeg_emotion,
+                            'eeg_source_file': Path(participant_file).name,
                             'eeg_midi': str(eeg_midi_path),
                             'classical_piece': row['classical_piece'],
                             'classical_dataset': row.get('classical_dataset', 'maestro'),

@@ -36,6 +36,9 @@ MAESTRO_PSEUDO_LABELS_PATH = RUNS_DIR / DEFAULT_RUN_ID / "report" / "maestro_pse
 # Частота дискретизации DEAP (фиксирована)
 DEAP_SAMPLE_RATE = 128  # Hz
 
+# Глобальный seed для воспроизводимости (random.shuffle, np.random, sklearn и т.п.)
+RANDOM_SEED = 42
+
 # Количество участников и триалов для обработки
 DEAP_NUM_PARTICIPANTS = 3
 DEAP_NUM_TRIALS = 5
@@ -94,8 +97,10 @@ EEG_MAX_WAVE_DURATION = 2.0
 # Минимальное расстояние между пиками (samples)
 EEG_MIN_PEAK_DISTANCE = 10
 
-# Тональность для EEG-MIDI
+# Тональность для EEG-MIDI (по умолчанию, если эмоция неизвестна)
 EEG_SCALE_KEY = 'C_major_pentatonic'
+
+
 
 # =============================================================================
 # ПАРАМЕТРЫ ЭКСПОРТА И PLAYBACK
@@ -114,7 +119,16 @@ MATCH_FRAGMENT_DURATION = 8.0
 # Порог для маппинга DEAP оценок (1-9) в квадранты (high/low)
 EMOTION_THRESHOLD = 5.0
 
-# Использовать ли EMOPIA датасет для сравнения
+# Источник классической музыки для сравнения: "both" | "emopia" | "maestro"
+# - "both"    — MAESTRO + EMOPIA (по умолчанию)
+# - "emopia"  — только EMOPIA (эмоционально размеченный)
+# - "maestro" — только MAESTRO (псевдо-разметка)
+DATASET_SOURCE = "both"
+
+# Допустимые значения DATASET_SOURCE
+DATASET_SOURCE_CHOICES = ("both", "emopia", "maestro")
+
+# (устарело) Использовать ли EMOPIA — оставлено для обратной совместимости
 USE_EMOPIA = True
 
 # Максимальное количество треков из EMOPIA (None = все)

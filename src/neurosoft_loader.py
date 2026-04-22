@@ -140,7 +140,7 @@ def prepare_neurosoft_signal_data(
     from .eeg_preprocessing import smooth_signal, pca_transform
 
     smoothed = smooth_signal(signals, window_len=max(3, srate // 25))
-    pca = pca_transform(signals, n_components=1)
+    pca = pca_transform(signals, n_components=3)
 
     return {
         "original": signals,

@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent
+from PySide6.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFileDialog, QListWidget,
@@ -35,28 +35,46 @@ class _FileDropArea(QFrame):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(6)
 
-        lbl = QLabel("Перетащите .eeg / .dat файлы сюда или нажмите кнопку")
+        lbl = QLabel("Перетащите .eeg / .dat файлы сюда или нажмите кнопку. "
+                     "Для удаления — выделите и нажмите Delete / Backspace.")
         lbl.setAlignment(Qt.AlignCenter)
+        lbl.setWordWrap(True)
         lbl.setStyleSheet(f"font-size:12px; color:{TEXT_SECONDARY};")
         root.addWidget(lbl)
 
         self._list = QListWidget()
         self._list.setObjectName("fileDrop")
         self._list.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self._list.setMaximumHeight(100)
+        self._list.setMinimumHeight(120)
+        self._list.setMaximumHeight(180)
         root.addWidget(self._list)
+
+        # Горячие клавиши удаления внутри списка
+        for seq in (QKeySequence.Delete, QKeySequence(Qt.Key_Backspace)):
+            sc = QShortcut(seq, self._list)
+            sc.setContext(Qt.WidgetShortcut)
+            sc.activated.connect(self._remove_selected)
 
         btn_row = QHBoxLayout()
         btn_add = QPushButton("Выбрать файлы")
         btn_add.setObjectName("secondary")
         btn_add.clicked.connect(self._browse)
         btn_row.addWidget(btn_add)
-        btn_rm = QPushButton("Удалить выбранные")
-        btn_rm.setObjectName("link")
-        btn_rm.clicked.connect(self._remove_selected)
-        btn_row.addWidget(btn_rm)
+
+        self._btn_rm = QPushButton("Удалить выбранные")
+        self._btn_rm.setObjectName("secondary")
+        self._btn_rm.setEnabled(False)
+        self._btn_rm.clicked.connect(self._remove_selected)
+        btn_row.addWidget(self._btn_rm)
+
+        btn_clear = QPushButton("Очистить список")
+        btn_clear.setObjectName("link")
+        btn_clear.clicked.connect(self.clear)
+        btn_row.addWidget(btn_clear)
         btn_row.addStretch()
         root.addLayout(btn_row)
+
+        self._list.itemSelectionChanged.connect(self._on_selection_changed)
 
     # ── drag and drop ──
     def dragEnterEvent(self, ev: QDragEnterEvent):
@@ -90,9 +108,19 @@ class _FileDropArea(QFrame):
             self.files_changed.emit()
 
     def _remove_selected(self):
-        for item in self._list.selectedItems():
-            self._list.takeItem(self._list.row(item))
+        selected = self._list.selectedItems()
+        if not selected:
+            return
+        # Собираем строки заранее и сортируем по убыванию,
+        # чтобы takeItem не смещал индексы ниже
+        rows = sorted({self._list.row(it) for it in selected}, reverse=True)
+        for row in rows:
+            self._list.takeItem(row)
         self.files_changed.emit()
+
+    def _on_selection_changed(self):
+        has = bool(self._list.selectedItems())
+        self._btn_rm.setEnabled(has)
 
     def _all(self) -> set[str]:
         return {self._list.item(i).text() for i in range(self._list.count())}
@@ -306,11 +334,27 @@ class LoadPage(QWidget):
         self._analysis_mode.addItem("Весь набор", "dataset")
         form.addRow("Режим:", self._analysis_mode)
 
-        self._chk_emopia = QCheckBox("Только EMOPIA")
-        form.addRow(self._chk_emopia)
+        # Источник классики: MAESTRO + EMOPIA (по умолчанию) / EMOPIA / MAESTRO
+        self._combo_dataset = QComboBox()
+        self._combo_dataset.addItem("MAESTRO + EMOPIA", "both")
+        self._combo_dataset.addItem("Только EMOPIA", "emopia")
+        self._combo_dataset.addItem("Только MAESTRO", "maestro")
+        self._combo_dataset.setToolTip(
+            "EMOPIA — эмоционально размечен вручную (ground-truth).\n"
+            "MAESTRO — большие классические произведения, эмоции предсказаны моделью.\n"
+            "MAESTRO + EMOPIA — сравнение идёт по обоим датасетам."
+        )
+        form.addRow("Источник классики:", self._combo_dataset)
 
         self._chk_match = QCheckBox("Учитывать эмоцию в ранжировании")
         form.addRow(self._chk_match)
+
+        # Seed — для воспроизводимости запусков
+        self._spin_seed = QSpinBox()
+        self._spin_seed.setRange(0, 2_147_483_647)
+        self._spin_seed.setValue(42)
+        self._spin_seed.setToolTip("Seed для random.shuffle и np.random — одинаковый seed ⇒ одинаковые результаты")
+        form.addRow("Seed:", self._spin_seed)
 
         right.addWidget(params_frame)
         right.addStretch()
@@ -383,6 +427,7 @@ class LoadPage(QWidget):
         if not files:
             QMessageBox.warning(self, "Нет файлов", "Загрузите хотя бы один файл.")
             return
+        dataset_source = self._combo_dataset.currentData() or "both"
         params = {
             "max_classical": self._spin_classical.value(),
             "top_k": self._spin_topk.value(),
@@ -390,10 +435,13 @@ class LoadPage(QWidget):
             "window_size": self._spin_window.value(),
             "hop_size": self._spin_hop.value(),
             "max_seconds": self._spin_max_seconds.value() or None,
-            "only_emopia": self._chk_emopia.isChecked(),
+            "dataset_source": dataset_source,
+            # обратная совместимость: worker всё ещё понимает only_emopia
+            "only_emopia": dataset_source == "emopia",
             "match_emotions": self._chk_match.isChecked(),
             "analysis_mode": self._analysis_mode.currentData(),
             "eeg_emotions": self._get_file_emotions(),  # per-file emotions
+            "seed": int(self._spin_seed.value()),
         }
         self.start_analysis.emit(files, params)
 
@@ -401,3 +449,40 @@ class LoadPage(QWidget):
         self._drop.clear()
         self._eeg_info.clear_info()
         self._rebuild_emotion_rows([])
+
+    def set_running(self, is_running: bool):
+        """Блокирует кнопку «Запустить анализ», пока идёт прогон."""
+        self._btn_run.setEnabled(not is_running)
+        self._btn_run.setText("Анализ выполняется…" if is_running else "Запустить анализ")
+
+    # ------------------------------------------------------------------
+    # Persist / restore form state (чтобы не сбрасывался при возврате с Results)
+    # ------------------------------------------------------------------
+    def apply_params(self, params: dict):
+        """Восстанавливает значения формы из словаря (игнорируя отсутствующие ключи)."""
+        if not params:
+            return
+        if "max_classical" in params:
+            self._spin_classical.setValue(int(params["max_classical"]))
+        if "top_k" in params:
+            self._spin_topk.setValue(int(params["top_k"]))
+        if "n_jobs" in params:
+            self._spin_jobs.setValue(int(params["n_jobs"] or 0))
+        if "window_size" in params:
+            self._spin_window.setValue(float(params["window_size"]))
+        if "hop_size" in params:
+            self._spin_hop.setValue(float(params["hop_size"]))
+        if "max_seconds" in params:
+            self._spin_max_seconds.setValue(float(params["max_seconds"] or 0))
+        if "dataset_source" in params:
+            idx = self._combo_dataset.findData(params["dataset_source"])
+            if idx >= 0:
+                self._combo_dataset.setCurrentIndex(idx)
+        if "match_emotions" in params:
+            self._chk_match.setChecked(bool(params["match_emotions"]))
+        if "analysis_mode" in params:
+            idx = self._analysis_mode.findData(params["analysis_mode"])
+            if idx >= 0:
+                self._analysis_mode.setCurrentIndex(idx)
+        if "seed" in params and params["seed"] is not None:
+            self._spin_seed.setValue(int(params["seed"]))
