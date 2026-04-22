@@ -35,7 +35,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("EEG Emotion Validation")
+        self.setWindowTitle("Преобразование сигналов ЭЭГ в музыкальные структуры")
         self.resize(1200, 820)
         self.setMinimumSize(900, 600)
 
@@ -77,6 +77,7 @@ class MainWindow(QMainWindow):
         self._worker = None
         self._current_files: list[str] = []
         self._current_params: dict = {}
+        self._cancelled = False  # флаг, чтобы finished_ok после cancel не перетирал UI
 
         self._go_welcome()
 
@@ -89,6 +90,9 @@ class MainWindow(QMainWindow):
         self._stack.setCurrentIndex(PAGE_WELCOME)
 
     def _go_load(self):
+        # Восстанавливаем ранее введённые параметры, чтобы форма не сбрасывалась
+        if self._current_params:
+            self._load.apply_params(self._current_params)
         self._stack.setCurrentIndex(PAGE_LOAD)
 
     def _go_analysis(self):
@@ -104,8 +108,18 @@ class MainWindow(QMainWindow):
 
     def _start_pipeline(self, files: list, params: dict):
         """Запуск пайплайна с параметрами от LoadPage."""
+        # Не допускаем повторный запуск, пока предыдущий worker жив
+        if self._worker is not None and self._worker.isRunning():
+            QMessageBox.information(
+                self, "Анализ уже идёт",
+                "Предыдущий анализ ещё не завершён. Дождитесь окончания или нажмите «Отмена».",
+            )
+            return
+
         self._current_files = files
         self._current_params = params
+        self._cancelled = False
+        self._load.set_running(True)
         self._go_analysis()
 
         from gui.worker import PipelineWorker
@@ -115,6 +129,7 @@ class MainWindow(QMainWindow):
             max_classical=params.get("max_classical", 10),
             top_k=params.get("top_k", 10),
             n_jobs=params.get("n_jobs"),
+            dataset_source=params.get("dataset_source"),
             only_emopia=params.get("only_emopia", False),
             match_emotions=params.get("match_emotions", False),
             analysis_mode=params.get("analysis_mode", "single"),
@@ -122,6 +137,7 @@ class MainWindow(QMainWindow):
             hop_size=params.get("hop_size", 2.0),
             max_seconds=params.get("max_seconds"),
             eeg_emotions=params.get("eeg_emotions"),
+            seed=params.get("seed"),
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.log_message.connect(self._on_log)
@@ -129,13 +145,33 @@ class MainWindow(QMainWindow):
         self._worker.finished_error.connect(self._on_error)
         self._worker.start()
 
+    def _disconnect_worker(self):
+        """Безопасно отвязывает сигналы worker'а перед уничтожением."""
+        if self._worker is None:
+            return
+        for sig, slot in (
+            (self._worker.progress, self._on_progress),
+            (self._worker.log_message, self._on_log),
+            (self._worker.finished_ok, self._on_finished),
+            (self._worker.finished_error, self._on_error),
+        ):
+            try:
+                sig.disconnect(slot)
+            except (TypeError, RuntimeError):
+                # Сигнал уже отключён либо C++-объект уничтожен — это нормально
+                pass
+
     def _cancel_pipeline(self):
+        self._cancelled = True
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
             self._analysis.mark_error("Отменено пользователем.")
+            self._disconnect_worker()
             self._worker.quit()
             self._worker.wait(3000)
+            self._worker.deleteLater()
             self._worker = None
+        self._load.set_running(False)
 
     # ------------------------------------------------------------------
     # Worker callbacks
@@ -148,7 +184,11 @@ class MainWindow(QMainWindow):
         self._analysis.append_log(msg)
 
     def _on_finished(self, results_df, report_dir: str):
+        # Если пользователь отменил прогон — поздний finished_ok игнорируем
+        if self._cancelled:
+            return
         self._analysis.mark_done()
+        self._load.set_running(False)
 
         # Сохраняем в историю
         best_score = 0.0
@@ -159,8 +199,6 @@ class MainWindow(QMainWindow):
                 best_score = float(results_df["music_match_score"].max())
             elif "combined_similarity" in results_df.columns:
                 best_score = float(results_df["combined_similarity"].max())
-            elif "cemms_score" in results_df.columns:
-                best_score = float(results_df["cemms_score"].max())
         except Exception:
             pass
 
@@ -177,7 +215,10 @@ class MainWindow(QMainWindow):
         self._go_results()
 
     def _on_error(self, msg: str):
+        if self._cancelled:
+            return
         self._analysis.mark_error(msg)
+        self._load.set_running(False)
         QMessageBox.critical(self, "Ошибка пайплайна", msg[:800])
 
     # ------------------------------------------------------------------
@@ -202,6 +243,9 @@ class MainWindow(QMainWindow):
     def closeEvent(self, ev):
         if self._worker and self._worker.isRunning():
             self._worker.cancel()
+            self._disconnect_worker()
             self._worker.quit()
             self._worker.wait(2000)
+            self._worker.deleteLater()
+            self._worker = None
         super().closeEvent(ev)

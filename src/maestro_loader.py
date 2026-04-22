@@ -1,6 +1,7 @@
 """
 Небольшой загрузчик MAESTRO dataset (CSV/JSON метаданные -> список MIDI файлов)
 """
+import threading
 from pathlib import Path
 import pandas as pd
 from typing import List, Optional, Dict, TypedDict
@@ -20,8 +21,9 @@ class TrackMeta(TypedDict):
     emotion_model: Optional[str]
 
 
-# Глобальный кэш для метаданных MAESTRO
+# Глобальный кэш для метаданных MAESTRO + блокировка для thread-safety
 _maestro_cache: Dict[str, TrackMeta] = {}
+_maestro_cache_lock = threading.RLock()
 
 
 def load_maestro_metadata(maestro_dir: str):
@@ -29,8 +31,7 @@ def load_maestro_metadata(maestro_dir: str):
     Загружает maestro-v3.0.0.csv (если есть) и возвращает DataFrame с полями,
     добавляя полный путь к midi файлу в колонку 'midi_path'.
     """
-    global _maestro_cache
-    
+    # Обновляем кэш in-place; .clear() небезопасен при параллельной обработке
     maestro_dir = Path(maestro_dir)
     csv_path = maestro_dir / 'maestro-v3.0.0.csv'
     if not csv_path.exists():
@@ -51,11 +52,11 @@ def load_maestro_metadata(maestro_dir: str):
     # Оставляем только существующие файлы
     df['midi_exists'] = df['midi_path'].apply(lambda p: Path(p).exists())
     
-    # Создаём кэш метаданных в новом формате TrackMeta
+    # Создаём кэш метаданных в новом формате TrackMeta (thread-safe)
     for _, row in df.iterrows():
         filename = Path(row['midi_path']).name
         track_id = Path(row['midi_path']).stem
-        _maestro_cache[filename] = TrackMeta(
+        entry = TrackMeta(
             track_id=track_id,
             dataset='maestro',
             midi_path=row['midi_path'],
@@ -67,7 +68,9 @@ def load_maestro_metadata(maestro_dir: str):
             emotion_confidence=row.get('emotion_confidence', None) if 'emotion_confidence' in df.columns else None,
             emotion_model=row.get('emotion_model', None) if 'emotion_model' in df.columns else None,
         )
-    
+        with _maestro_cache_lock:
+            _maestro_cache[filename] = entry
+
     return df
 
 
@@ -82,7 +85,9 @@ def get_maestro_metadata(filename: str) -> TrackMeta:
     """
     # Нормализуем имя файла
     filename = Path(filename).name
-    if filename not in _maestro_cache:
+    with _maestro_cache_lock:
+        cached = _maestro_cache.get(filename)
+    if cached is None:
         # Возвращаем пустую запись
         return TrackMeta(
             track_id=Path(filename).stem,
@@ -96,7 +101,7 @@ def get_maestro_metadata(filename: str) -> TrackMeta:
             emotion_confidence=None,
             emotion_model=None
         )
-    return _maestro_cache[filename]
+    return cached
 
 
 def get_maestro_midi_files(maestro_dir: str, max_files: Optional[int] = None) -> List[str]:

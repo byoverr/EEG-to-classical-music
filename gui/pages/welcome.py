@@ -106,9 +106,10 @@ class WelcomePage(QWidget):
         root.setSpacing(0)
 
         # ── Title block ──
-        title = QLabel("EEG → Classical Music")
+        title = QLabel("Преобразование сигналов ЭЭГ в музыкальные структуры")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"font-size:32px; font-weight:700; color:{PRIMARY}; margin-bottom:2px;")
+        title.setStyleSheet(f"font-size:22px; font-weight:700; color:{PRIMARY}; margin-bottom:2px;")
+        title.setWordWrap(True)
         root.addWidget(title)
 
         subtitle = QLabel("Анализ ЭЭГ-сигналов и сравнение с классическими произведениями")

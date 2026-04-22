@@ -120,25 +120,18 @@ def add_hypothesis_scores(
         feature_score = _mean_existing(row, FEATURE_EVIDENCE_COLUMNS)
         fragment_score = music_score
 
-        cemms = (
-            weights["emotion"] * emotion_score
-            + weights["feature"] * feature_score
-            + weights["fragment"] * fragment_score
-        )
         music_scores.append(music_score)
         emotion_scores.append(_clip01(emotion_score))
         feature_scores.append(_clip01(feature_score))
         fragment_scores.append(_clip01(fragment_score))
-        final_scores.append(_clip01(cemms))
         labels.append(label)
 
     df[PRIMARY_RANKING_COLUMN] = music_scores
     df["emotion_agreement_score"] = emotion_scores
     df["feature_similarity_score"] = feature_scores
     df["fragment_alignment_score"] = fragment_scores
-    df["cemms_score"] = final_scores
     df["match_label"] = labels
-    sort_cols = [c for c in [PRIMARY_RANKING_COLUMN, "cemms_score"] if c in df.columns]
+    sort_cols = [c for c in [PRIMARY_RANKING_COLUMN] if c in df.columns]
     if sort_cols:
         df = df.sort_values(sort_cols, ascending=[False] * len(sort_cols)).reset_index(drop=True)
     return df
@@ -180,11 +173,12 @@ def compute_hypothesis_metrics(
     macro_f1 = 0.0
     top_k_accuracy = 0.0
 
+    strict_top1_match_rate = 0.0
     if not emotion_rows.empty:
         y_true = emotion_rows["eeg_emotion"].astype(str)
         y_pred = emotion_rows["classical_emotion"].astype(str)
         labels = sorted(set(y_true.unique()).union(set(y_pred.unique())))
-        emotion_match_rate = float((y_true == y_pred).mean())
+        strict_top1_match_rate = float((y_true == y_pred).mean())
         try:
             from sklearn.metrics import f1_score
 
@@ -215,6 +209,29 @@ def compute_hypothesis_metrics(
                 topk_by_group.groupby(group_cols, dropna=False).apply(_topk_hit).mean()
             )
 
+    # emotion_match_rate = совпадений в top-K / всего строк top-K (по Расселу)
+    if not topk_by_group.empty and {"eeg_emotion", "classical_emotion"}.issubset(topk_by_group.columns):
+        _topk_clean = topk_by_group.dropna(subset=["eeg_emotion", "classical_emotion"])
+        if not _topk_clean.empty:
+            _matches = (_topk_clean["eeg_emotion"].astype(str) ==
+                        _topk_clean["classical_emotion"].astype(str)).sum()
+            emotion_match_rate = float(_matches / len(_topk_clean))
+    else:
+        emotion_match_rate = 0.0
+
+    # macro-F1 computed over all top-K rows (more robust for small datasets)
+    if not topk_by_group.empty and {"eeg_emotion", "classical_emotion"}.issubset(topk_by_group.columns):
+        _topk_rows = topk_by_group.dropna(subset=["eeg_emotion", "classical_emotion"])
+        if not _topk_rows.empty:
+            _yt = _topk_rows["eeg_emotion"].astype(str)
+            _yp = _topk_rows["classical_emotion"].astype(str)
+            labels = sorted(set(_yt.unique()).union(set(_yp.unique())))
+            try:
+                from sklearn.metrics import f1_score as _f1
+                macro_f1 = float(_f1(_yt, _yp, labels=labels, average="macro", zero_division=0))
+            except Exception:
+                macro_f1 = 0.0
+
     cohort_rows = []
     comp_col = "title" if "title" in best_by_group.columns else "classical_piece"
     composer_col = "composer" if "composer" in best_by_group.columns else "classical_composer"
@@ -234,7 +251,6 @@ def compute_hypothesis_metrics(
                 "consistency": float(title_counts.iloc[0] / title_counts.sum()),
                 "n_people": int(title_counts.sum()),
                 "mean_music_match_score": float(group[ranking_col].mean()) if ranking_col in group.columns else 0.0,
-                "mean_cemms_score": float(group["cemms_score"].mean()) if "cemms_score" in group.columns else 0.0,
             })
     cohort_df = pd.DataFrame(cohort_rows)
 
@@ -243,7 +259,7 @@ def compute_hypothesis_metrics(
         "ioi_mean", "rhythm_regularity", "consonance_mean",
         "pitch_class_entropy", "interval_mean", "interval_std",
         "velocity_mean", "velocity_std",
-        "feature_similarity_score", "fragment_alignment_score", "cemms_score",
+        "feature_similarity_score", "fragment_alignment_score",
     ] if c in best_by_group.columns]
     feature_summary = pd.DataFrame()
     if feature_cols and "eeg_emotion" in best_by_group.columns:
@@ -270,10 +286,9 @@ def compute_hypothesis_metrics(
         "mean_music_match_score": float(df[ranking_col].mean()) if ranking_col in df.columns else 0.0,
         "best_music_match_score": float(df[ranking_col].max()) if ranking_col in df.columns else 0.0,
         "emotion_match_rate": float(emotion_match_rate),
+        "strict_top1_match_rate": float(strict_top1_match_rate),
         "macro_f1": float(macro_f1),
         "top_k_accuracy": float(top_k_accuracy),
-        "mean_cemms_score": float(df["cemms_score"].mean()) if "cemms_score" in df.columns else 0.0,
-        "best_cemms_score": float(df["cemms_score"].max()) if "cemms_score" in df.columns else 0.0,
         "labels": labels,
         "top_works": dominant_works,
         "top_composers": dominant_composers,

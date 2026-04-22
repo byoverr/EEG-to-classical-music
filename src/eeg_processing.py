@@ -2,8 +2,11 @@
 Модуль обработки ЭЭГ и сонификации на основе волновых мотивов.
 Точная реализация метода Destexhe and Foubert (2022).
 """
+from __future__ import annotations
+
 import numpy as np
 from .midi_utils import create_midi_with_precise_timing
+from . import config as _cfg
 
 
 def _shift_motif(motif: dict, sample_offset: int, time_offset: float) -> dict:
@@ -40,11 +43,12 @@ def _deduplicate_motifs(motifs: list[dict], min_separation_sec: float = 0.08) ->
         deduped.append(motif)
     return deduped
 
-def detect_wave_motifs(signal_array: np.ndarray, fs: float = 250.0, 
-                      threshold1_std: float = 0.5, 
-                      threshold2_std: float = 1.0,
-                      min_duration: float = 0.2, 
-                      max_duration: float = 2.0):
+def detect_wave_motifs(signal_array: np.ndarray,
+                      fs: float | None = None,
+                      threshold1_std: float | None = None,
+                      threshold2_std: float | None = None,
+                      min_duration: float | None = None,
+                      max_duration: float | None = None):
     """
     Детекция волновых мотивов методом двух порогов (Destexhe & Foubert, 2022).
     
@@ -65,6 +69,18 @@ def detect_wave_motifs(signal_array: np.ndarray, fs: float = 250.0,
     Возвращает:
     - список словарей с параметрами волн для ADSR маппинга
     """
+    # Дефолты берём из config, чтобы не было рассинхрона между вызывающим кодом и конфигом
+    if fs is None:
+        fs = float(_cfg.DEAP_SAMPLE_RATE)
+    if threshold1_std is None:
+        threshold1_std = float(_cfg.EEG_THRESHOLD_LOW_STD)
+    if threshold2_std is None:
+        threshold2_std = float(_cfg.EEG_THRESHOLD_HIGH_STD)
+    if min_duration is None:
+        min_duration = float(_cfg.EEG_MIN_WAVE_DURATION)
+    if max_duration is None:
+        max_duration = float(_cfg.EEG_MAX_WAVE_DURATION)
+
     mean_sig = np.mean(signal_array)
     std_sig = np.std(signal_array)
     
@@ -151,11 +167,11 @@ def detect_wave_motifs(signal_array: np.ndarray, fs: float = 250.0,
 
 def detect_wave_motifs_segmented(
     signal_array: np.ndarray,
-    fs: float = 250.0,
-    threshold1_std: float = 0.5,
-    threshold2_std: float = 1.0,
-    min_duration: float = 0.2,
-    max_duration: float = 2.0,
+    fs: float | None = None,
+    threshold1_std: float | None = None,
+    threshold2_std: float | None = None,
+    min_duration: float | None = None,
+    max_duration: float | None = None,
     segment_duration: float = 12.0,
     hop_duration: float = 6.0,
 ):
@@ -167,6 +183,17 @@ def detect_wave_motifs_segmented(
     содержать валидные волновые структуры, которые теряются при одном
     глобальном std на весь файл.
     """
+    if fs is None:
+        fs = float(_cfg.DEAP_SAMPLE_RATE)
+    if threshold1_std is None:
+        threshold1_std = float(_cfg.EEG_THRESHOLD_LOW_STD)
+    if threshold2_std is None:
+        threshold2_std = float(_cfg.EEG_THRESHOLD_HIGH_STD)
+    if min_duration is None:
+        min_duration = float(_cfg.EEG_MIN_WAVE_DURATION)
+    if max_duration is None:
+        max_duration = float(_cfg.EEG_MAX_WAVE_DURATION)
+
     signal_array = np.asarray(signal_array, dtype=float)
     if signal_array.size == 0:
         return []
@@ -212,35 +239,61 @@ def map_motifs_to_adsr_sounds(motifs: list, scale_key: str = 'C_major_pentatonic
     """
     Преобразует параметры мотивов в музыкальные события с ADSR envelope.
     Реализует маппинг из статьи (Section III.B, Figure 2-3).
-    
+
     Маппинг из статьи:
     - Onset time (EEG) -> Onset time (sound)
-    - Amplitude (EEG) -> Volume/Velocity (sound) 
+    - Amplitude (EEG) -> Volume/Velocity (sound)
     - Rise time (EEG) -> Attack (ADSR)
     - Decay time (EEG) -> Decay (ADSR)
     - Duration (EEG) -> Duration (sound)
-    
-    Опционально: Amplitude может мапиться также на Pitch
-    
+
     Параметры:
     - motifs: список обнаруженных мотивов
     - scale_key: тональность для маппинга высоты
-    
+
     Возвращает:
     - список событий для MIDI с ADSR параметрами
     """
     if not motifs:
         return []
-    
-    # Гаммы (пентатоника для приятного звучания)
+
+    # =========================================================================
+    # ГАММЫ: расширенный набор с музыкально-теоретическим обоснованием
+    # =========================================================================
+    # Каждая гамма покрывает 3 октавы (MIDI 48-84) для достаточного
+    # мелодического диапазона. Выбор ступеней соответствует музыкальной
+    # теории (интервальная структура сохранена).
     scales = {
+        # Мажорная пентатоника (C-D-E-G-A): яркая, оптимистичная
+        # Отсутствие IV и VII ступеней убирает все полутоновые напряжения
         'C_major_pentatonic': [48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81, 84],
+
+        # Натуральный мажор (C-D-E-F-G-A-B): полная палитра, светлый характер
+        'C_major': [48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74, 76],
+
+        # Минорная пентатоника (A-C-D-E-G): грустная, но мягкая
+        # Отсутствие II и VI ступеней — нет острых полутонов
         'A_minor_pentatonic': [45, 48, 50, 52, 55, 57, 60, 62, 64, 67, 69, 72, 74, 76, 79, 81],
-        'D_minor': [50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72]
+
+        # Натуральный минор (A-B-C-D-E-F-G): классическая грусть
+        'A_natural_minor': [45, 47, 48, 50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72],
+
+        # Гармонический минор (A-B-C-D-E-F-G#): напряжение, драматизм
+        # Увеличенная секунда F-G# создаёт характерное «восточное» напряжение
+        'A_harmonic_minor': [45, 47, 48, 50, 52, 53, 56, 57, 59, 60, 62, 64, 65, 68, 69, 71, 72],
+
+        # Дорийский лад (D-E-F-G-A-B-C): мягкий минор, меланхолия без трагизма
+        'D_dorian': [50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72, 74],
+
+        # Обратная совместимость
+        'D_minor': [50, 52, 53, 55, 57, 59, 60, 62, 64, 65, 67, 69, 71, 72],
     }
-    
+
     scale = scales.get(scale_key, scales['C_major_pentatonic'])
-    
+
+    vel_min, vel_max = 50, 127
+    vel_range = vel_max - vel_min
+
     # Нормализация параметров для более выразительного маппинга
     amplitudes = [m['peak_amplitude'] for m in motifs]
     durations = [m['duration'] for m in motifs]
@@ -267,12 +320,12 @@ def map_motifs_to_adsr_sounds(motifs: list, scale_key: str = 'C_major_pentatonic
         phrase_progress = idx / max(len(motifs) - 1, 1)
 
         # === МАППИНГ КАК В СТАТЬЕ ===
-        
+
         # 1. Amplitude -> Velocity (Volume)
         # "the amplitude can be mapped to different parameters of the sound wave...
         # the amplitude of the EEG wave onto the amplitude of the sound wave (which reflects its volume)"
-        velocity = int(50 + norm_amp * 77)  # 50-127 range
-        
+        velocity = int(vel_min + norm_amp * vel_range)
+
         # 2. EEG parameters -> Pitch.
         # Чтобы мелодия не схлопывалась в 2-3 одинаковые ноты,
         # используем не только амплитуду, но и длительность, rise-time и локальный contour.
@@ -299,46 +352,47 @@ def map_motifs_to_adsr_sounds(motifs: list, scale_key: str = 'C_major_pentatonic
             shift = 1 if (idx % 2 == 0) else -1
             alt_idx = max(0, min(len(scale) - 1, pitch_idx + shift))
             pitch = scale[alt_idx]
-        
+
         # 3. ADSR параметры из EEG волны
         # "the attack and decay can be mapped to the rise and decay times of the EEG wave"
         attack = m['attack']
         decay = m['decay']
-        
+
         # Sustain и Release из статьи:
-        # "the tail of the sound wave (with sustain parameter) could be used 
+        # "the tail of the sound wave (with sustain parameter) could be used
         # to let the sound last until the next sound comes in"
         sustain_level = 0.7  # 70% от пика
         release = min(0.15, decay * 0.5)  # Короткий release
-        
+
         # 4. Duration mapping
         # "A natural conversion is the duration of the sound wave"
         duration = m['duration']
-        
+
         event = {
             # Время
             'onset': m['onset_time'],
             'duration': duration,
-            
+
             # Нота и громкость
             'pitch': pitch,
             'velocity': velocity,
-            
+
             # ADSR envelope (ключевой элемент метода!)
             'attack': attack,
             'decay': decay,
             'sustain': sustain_level,
             'release': release,
-            
+
             # Метаданные
             '_amplitude': m['peak_amplitude'],
-            '_norm_amplitude': norm_amp
+            '_norm_amplitude': norm_amp,
+            '_scale': scale_key,
         }
-        
+
         events.append(event)
         prev_pitch = pitch
         prev_norm_amp = norm_amp
-    
+
     return events
 
 
@@ -360,6 +414,8 @@ def compress_timed_events(
     """
     if not events:
         return []
+
+    compress_factor = 1.0
 
     ordered = sorted(events, key=lambda ev: float(ev.get("onset", 0.0)))
     compressed = []
@@ -392,8 +448,10 @@ def compress_timed_events(
     return compressed
 
 
-def process_eeg_to_midi(signal_data: dict, output_path: str, 
-                       threshold1: float = 0.5, threshold2: float = 1.0,
+def process_eeg_to_midi(signal_data: dict, output_path: str,
+                       fs: float | None = None,
+                       threshold1: float | None = None,
+                       threshold2: float | None = None,
                        scale: str = 'C_major_pentatonic'):
     """
     Главная функция: ЭЭГ -> MIDI через волновые мотивы.
@@ -426,57 +484,43 @@ def process_eeg_to_midi(signal_data: dict, output_path: str,
         analysis_signal = sig[0, :] if sig.ndim > 1 else sig
     else:
         raise ValueError("No suitable signal in signal_data (need 'pca' or 'smoothed')")
-    
-    print(f"Analyzing signal: {len(analysis_signal)} samples")
-    
+
+    if fs is None:
+        fs = float(_cfg.DEAP_SAMPLE_RATE)
+
     # Шаг 2: Детекция волновых мотивов (Section III.A)
-    # "scanning the signal and detecting the delta waves using a two-threshold procedure"
     motifs = detect_wave_motifs(
-        analysis_signal, 
-        fs=250.0,  # Частота из статьи
+        analysis_signal,
+        fs=fs,
         threshold1_std=threshold1,
         threshold2_std=threshold2,
-        min_duration=0.2,  # Минимум для дельта-волн
-        max_duration=2.0
+        min_duration=_cfg.EEG_MIN_WAVE_DURATION,
+        max_duration=_cfg.EEG_MAX_WAVE_DURATION,
     )
-    
-    print(f"Detected {len(motifs)} wave motifs")
-    
-    # Если ничего не найдено, снижаем пороги
+
+    # Если ничего не найдено — снижаем пороги, но всё равно требуем результата
     if not motifs:
-        print("Warning: No motifs found, trying lower thresholds...")
         motifs = detect_wave_motifs(
             analysis_signal,
-            fs=250.0,
-            threshold1_std=0.3,
-            threshold2_std=0.6,
-            min_duration=0.15,
-            max_duration=2.5
+            fs=fs,
+            threshold1_std=max(0.2, _cfg.EEG_THRESHOLD_LOW_STD * 0.6),
+            threshold2_std=max(0.5, _cfg.EEG_THRESHOLD_HIGH_STD * 0.6),
+            min_duration=max(0.05, _cfg.EEG_MIN_WAVE_DURATION * 0.5),
+            max_duration=_cfg.EEG_MAX_WAVE_DURATION + 0.5,
         )
-        print(f"Detected {len(motifs)} motifs with lower thresholds")
-    
+
     if not motifs:
-        print("ERROR: Still no motifs detected!")
-        # Создаем пустой MIDI
-        create_midi_with_precise_timing([], output_path)
-        return 0
-    
-    # Шаг 3: Преобразование в звуки с ADSR (Section III.B)
-    # "converting to the classic parametrization of sound envelopes: ADSR parameters"
+        # Не создаём пустой MIDI «молча» — сообщаем вызывающему, чтобы тот решил, что делать
+        raise RuntimeError(
+            f"Мотивы не обнаружены даже с пониженными порогами "
+            f"(fs={fs} Hz, signal_len={len(analysis_signal)} samples). "
+            "Проверьте качество сигнала/препроцессинг."
+        )
+
+    # Шаг 3: Преобразование в звуки с ADSR
     music_events = map_motifs_to_adsr_sounds(motifs, scale_key=scale)
-    
-    print(f"Generated {len(music_events)} musical events")
-    
+
     # Шаг 4: Сохранение в MIDI
     create_midi_with_precise_timing(music_events, output_path)
-    
-    # Статистика
-    if motifs:
-        durations = [m['duration'] for m in motifs]
-        amplitudes = [m['peak_amplitude'] for m in motifs]
-        print(f"\nMotif statistics:")
-        print(f"  Duration: {np.mean(durations):.3f}s (±{np.std(durations):.3f}s)")
-        print(f"  Amplitude: {np.mean(amplitudes):.3f} (±{np.std(amplitudes):.3f})")
-        print(f"  Total time span: {motifs[-1]['onset_time']:.2f}s")
-    
+
     return len(music_events)

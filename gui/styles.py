@@ -10,11 +10,32 @@ ACCENT = "#34a853"
 DANGER = "#d93025"
 WARNING = "#f9ab00"
 TEXT_PRIMARY = "#202124"
-TEXT_SECONDARY = "#5f6368"
+TEXT_SECONDARY = "#3c4043"   # поднят контраст (было #5f6368 — на грани WCAG AA)
+TEXT_MUTED = "#5f6368"        # для совсем «фоновых» подписей, где контраст не критичен
 BG_PAGE = "#f8f9fa"
 BG_CARD = "#ffffff"
 BORDER = "#dadce0"
 SHADOW = "rgba(0,0,0,0.08)"
+
+# Design tokens — повторяющиеся акцентные подложки (избавляемся от хардкода в страницах)
+CARD_HIGHLIGHT_BG = "#f8fbff"   # лёгкая голубая подложка: score-box, lead-callout
+TABLE_HEADER_BG = "#f4f7fb"     # шапки таблиц
+ROW_ALT_BG = "#fbfcfd"          # зебра-строки
+BORDER_SOFT = "#eceff3"         # внутренние разделители
+HOVER_BG = "#e8f0fe"            # ховер primary-элементов
+
+# Индикаторы соответствия (ожидаемое vs реальное)
+MATCH_OK = "#34a853"
+MATCH_WARN = "#f9ab00"
+MATCH_BAD = "#d93025"
+MATCH_NONE = "#9aa0a6"
+
+# Spacing scale (пиксели, одинаково для layout.setSpacing / setContentsMargins)
+SPACING_XS = 4
+SPACING_SM = 8
+SPACING_MD = 12
+SPACING_LG = 16
+SPACING_XL = 24
 
 # Цвета эмоций
 EMOTION_COLORS = {

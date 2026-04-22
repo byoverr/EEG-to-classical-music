@@ -12,6 +12,7 @@ EMOPIA содержит фортепианные MIDI с разметкой эм
 - label.csv: метаданные (ID, 4Q, annotator)
 """
 import json
+import threading
 import pandas as pd
 from pathlib import Path
 from typing import List, Dict, Optional, TypedDict, Tuple
@@ -38,9 +39,11 @@ EMOPIA_QUADRANT_MAP = {
 }
 
 
-# Глобальный кэш метаданных EMOPIA
+# Глобальный кэш метаданных EMOPIA + блокировка для безопасного доступа
+# из нескольких потоков (GUI worker использует ThreadPoolExecutor).
 _emopia_cache: Dict[str, TrackMeta] = {}
 _emopia_meta_cache: Dict[str, dict] = {}
+_emopia_cache_lock = threading.RLock()
 
 
 def _parse_emopia_track_id(track_id: str) -> Tuple[str, Optional[int]]:
@@ -61,25 +64,26 @@ def _parse_emopia_track_id(track_id: str) -> Tuple[str, Optional[int]]:
 
 def _load_youtube_metadata(emopia_dir: Path, track_id: str) -> dict:
     """Загружает metadata JSON для конкретного трека EMOPIA."""
-    if track_id in _emopia_meta_cache:
-        return _emopia_meta_cache[track_id]
+    with _emopia_cache_lock:
+        if track_id in _emopia_meta_cache:
+            return _emopia_meta_cache[track_id]
 
     youtube_id, _ = _parse_emopia_track_id(track_id)
     # Metadata файлы содержат префикс квадранта Q1/Q2/Q3/Q4
     quadrant = track_id.split('_')[0]
     meta_path = emopia_dir / 'metadata' / f"{quadrant}_{youtube_id}.json"
 
+    data: dict = {}
     if meta_path.exists():
         try:
             with open(meta_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
-                _emopia_meta_cache[track_id] = data
-                return data
         except Exception:
-            pass
+            data = {}
 
-    _emopia_meta_cache[track_id] = {}
-    return {}
+    with _emopia_cache_lock:
+        _emopia_meta_cache[track_id] = data
+    return data
 
 
 def load_emopia_metadata(emopia_dir: str) -> pd.DataFrame:
@@ -92,9 +96,8 @@ def load_emopia_metadata(emopia_dir: str) -> pd.DataFrame:
     Возвращает:
     - DataFrame с колонками: ID, 4Q, emotion, midi_path, midi_exists
     """
-    global _emopia_cache
-    _emopia_cache.clear()
-    
+    # НЕ сбрасываем кэш целиком — это ломает параллельные потоки.
+    # Обновляем записи in-place; отсутствующие добавляются, существующие перезаписываются.
     emopia_dir = Path(emopia_dir)
     label_csv = emopia_dir / 'label.csv'
     
@@ -117,7 +120,7 @@ def load_emopia_metadata(emopia_dir: str) -> pd.DataFrame:
     # Проверяем существование файлов
     df['midi_exists'] = df['midi_path'].apply(lambda p: Path(p).exists())
     
-    # Заполняем кэш
+    # Заполняем кэш (потокобезопасно)
     for _, row in df.iterrows():
         if row['midi_exists']:
             track_id = row['ID']
@@ -126,7 +129,7 @@ def load_emopia_metadata(emopia_dir: str) -> pd.DataFrame:
             title = meta.get('title') or f"YouTube {youtube_id}"
             uploader = meta.get('uploader') or "YouTube"
             clip_suffix = f" (clip {clip_idx})" if clip_idx is not None else ""
-            _emopia_cache[track_id] = TrackMeta(
+            entry = TrackMeta(
                 track_id=track_id,
                 dataset='emopia',
                 midi_path=row['midi_path'],
@@ -136,7 +139,9 @@ def load_emopia_metadata(emopia_dir: str) -> pd.DataFrame:
                 emotion=row['emotion'],
                 emotion_source='ground_truth'
             )
-    
+            with _emopia_cache_lock:
+                _emopia_cache[track_id] = entry
+
     return df
 
 
@@ -150,7 +155,9 @@ def get_emopia_metadata(track_id: str) -> TrackMeta:
     Возвращает:
     - TrackMeta словарь с метаданными
     """
-    if track_id not in _emopia_cache:
+    with _emopia_cache_lock:
+        cached = _emopia_cache.get(track_id)
+    if cached is None:
         # Возвращаем пустую запись, если не найдено
         youtube_id, clip_idx = _parse_emopia_track_id(track_id)
         clip_suffix = f" (clip {clip_idx})" if clip_idx is not None else ""
@@ -164,7 +171,7 @@ def get_emopia_metadata(track_id: str) -> TrackMeta:
             emotion=None,
             emotion_source=None
         )
-    return _emopia_cache[track_id]
+    return cached
 
 
 def get_emopia_track_info(emopia_dir: str, track_id: str) -> dict:
