@@ -124,12 +124,21 @@ class MainWindow(QMainWindow):
 
         from gui.worker import PipelineWorker
 
+        # Определяем dataset_source из radio-кнопок LoadPage
+        if params.get("only_emopia"):
+            _ds = "emopia"
+        elif params.get("only_maestro"):
+            _ds = "maestro"
+        else:
+            _ds = params.get("dataset_source", "both")
+
         self._worker = PipelineWorker(
             eeg_files=files,
             max_classical=params.get("max_classical", 10),
+            max_trials=params.get("max_trials", 5),
             top_k=params.get("top_k", 10),
             n_jobs=params.get("n_jobs"),
-            dataset_source=params.get("dataset_source"),
+            dataset_source=_ds,
             only_emopia=params.get("only_emopia", False),
             match_emotions=params.get("match_emotions", False),
             analysis_mode=params.get("analysis_mode", "single"),
@@ -138,6 +147,9 @@ class MainWindow(QMainWindow):
             max_seconds=params.get("max_seconds"),
             eeg_emotions=params.get("eeg_emotions"),
             seed=params.get("seed"),
+            compare_modes=params.get("compare_modes", False),
+            target_emotion=params.get("target_emotion"),
+            manual_midi_path=params.get("manual_midi_path"),
         )
         self._worker.progress.connect(self._on_progress)
         self._worker.log_message.connect(self._on_log)

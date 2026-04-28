@@ -1572,8 +1572,10 @@ class ResultsPage(QWidget):
 
         self._filter_emotion = QComboBox()
         self._filter_emotion.addItem("Эмоция: Все", "all")
-        for emo in ("HVHA", "HVLA", "LVHA", "LVLA"):
-            self._filter_emotion.addItem(emo, emo)
+        self._filter_emotion.addItem("Радостный / Возбуждённый (HVHA)", "HVHA")
+        self._filter_emotion.addItem("Спокойный / Умиротворённый (HVLA)", "HVLA")
+        self._filter_emotion.addItem("Злой / Напряжённый (LVHA)", "LVHA")
+        self._filter_emotion.addItem("Грустный / Подавленный (LVLA)", "LVLA")
         self._filter_emotion.currentIndexChanged.connect(self._apply_filter)
         top_lay.addWidget(self._filter_emotion)
 
@@ -1593,6 +1595,96 @@ class ResultsPage(QWidget):
         self._content.setContentsMargins(20, 14, 20, 14)
         self._content.setSpacing(12)
         root.addLayout(self._content, stretch=1)
+
+    # ------------------------------------------------------------------
+    # Extra tabs: Ручной MIDI, Сравнение стратегий
+    # ------------------------------------------------------------------
+
+    def _build_manual_midi_tab(self, df: pd.DataFrame) -> QWidget:
+        """Вкладка с результатами сравнения с ручным MIDI."""
+        from gui.styles import PRIMARY, TEXT_SECONDARY, BG_CARD
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(10)
+
+        title = QLabel("Сравнение с выбранным вручную MIDI-файлом")
+        title.setStyleSheet(f"font-size:15px; font-weight:600; color:{PRIMARY};")
+        lay.addWidget(title)
+
+        for rank, row in enumerate(df.to_dict("records"), start=1):
+            card = _MatchCard(row, rank)
+            lay.addWidget(card)
+
+        lay.addStretch()
+        return w
+
+    def _build_strategy_comparison(self, df: pd.DataFrame) -> QWidget:
+        """Вкладка сравнения двух стратегий поиска."""
+        from gui.styles import PRIMARY, TEXT_SECONDARY, BG_CARD, BORDER
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(14)
+
+        title = QLabel("Сравнение стратегий поиска")
+        title.setStyleSheet(f"font-size:16px; font-weight:700; color:{PRIMARY};")
+        lay.addWidget(title)
+
+        strategies = df["search_strategy"].unique().tolist()
+        metrics = [
+            ("combined_similarity", "Итоговое сходство"),
+            ("music_match_score",   "Совпадение музыки"),
+            ("contour_similarity",  "Контур"),
+            ("feature_similarity",  "Сходство признаков"),
+        ]
+
+        # Build summary table
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        # Header
+        header_strat = QLabel("Стратегия")
+        header_strat.setStyleSheet(f"font-weight:700; color:{TEXT_SECONDARY};")
+        grid.addWidget(header_strat, 0, 0)
+        for ci, (_, name) in enumerate(metrics):
+            h = QLabel(name)
+            h.setStyleSheet(f"font-weight:700; color:{TEXT_SECONDARY};")
+            grid.addWidget(h, 0, ci + 1)
+
+        for ri, strat in enumerate(strategies):
+            sub = df[df["search_strategy"] == strat]
+            strat_label = {
+                "all": "Все произведения",
+                "manual": "Ручной MIDI",
+            }.get(strat, strat)
+            lbl = QLabel(strat_label)
+            lbl.setStyleSheet(f"font-weight:600;")
+            grid.addWidget(lbl, ri + 1, 0)
+            for ci, (col, _) in enumerate(metrics):
+                if col in sub.columns:
+                    val = float(sub[col].mean())
+                    cell = QLabel(f"{val:.3f}")
+                    cell.setAlignment(Qt.AlignCenter)
+                    grid.addWidget(cell, ri + 1, ci + 1)
+
+        frame = QFrame()
+        frame.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:8px; padding:8px; }}")
+        frame.setLayout(grid)
+        lay.addWidget(frame)
+
+        # Verdict
+        sim_col = "combined_similarity" if "combined_similarity" in df.columns else "music_match_score"
+        if sim_col in df.columns:
+            best_strat = df.groupby("search_strategy")[sim_col].mean().idxmax()
+            best_label = {"all": "Все произведения", "manual": "Ручной MIDI"}.get(best_strat, best_strat)
+            verdict = QLabel(f"Лучшая стратегия по среднему сходству: {best_label}")
+            verdict.setStyleSheet(f"font-size:13px; color:{PRIMARY}; font-weight:600; padding:8px 0;")
+            lay.addWidget(verdict)
+
+        lay.addStretch()
+        return w
+
 
     def load_results(self, df: pd.DataFrame, report_dir: str):
         self._df = df.copy()
@@ -1714,6 +1806,19 @@ class ResultsPage(QWidget):
         self._tabs.addTab(_wrap_scroll(self._build_transform_tab(df)), "Преобразование")
         self._tabs.addTab(_wrap_scroll(self._build_emotion_tab(df)), "Эмоции")
         self._tabs.addTab(_wrap_scroll(self._build_summary_tab(df)), "Отчёт")
+
+        # Вкладка «Ручной MIDI» — если есть результаты ручного сравнения
+        if "search_strategy" in df.columns and (df["search_strategy"] == "manual").any():
+            manual_df = df[df["search_strategy"] == "manual"]
+            self._tabs.addTab(
+                _wrap_scroll(self._build_manual_midi_tab(manual_df)), "Ручной MIDI"
+            )
+
+        # Вкладка «Сравнение стратегий» — если сравнивали два режима
+        if "search_strategy" in df.columns and df["search_strategy"].nunique() > 1:
+            self._tabs.addTab(
+                _wrap_scroll(self._build_strategy_comparison(df)), "⚖ Сравнение"
+            )
 
     def _build_matches_tab(self, df: pd.DataFrame) -> QWidget:
         scroll = QScrollArea()

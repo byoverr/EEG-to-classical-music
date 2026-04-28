@@ -27,7 +27,7 @@ RUNS_DIR = PROJECT_ROOT / "runs"
 DEFAULT_RUN_ID = "run_001"
 
 # Псевдо-разметка MAESTRO (кэш)
-MAESTRO_PSEUDO_LABELS_PATH = RUNS_DIR / DEFAULT_RUN_ID / "report" / "maestro_pseudo_labels.csv"
+MAESTRO_PSEUDO_LABELS_PATH = RUNS_DIR / "maestro_labeling_20260420_183814" / "maestro_predictions.csv"
 
 # =============================================================================
 # ПАРАМЕТРЫ DEAP ДАТАСЕТА
@@ -111,6 +111,7 @@ PLAYBACK_TEMPO_MULTIPLIER = 1.2
 
 # Длительность matched-фрагмента для GUI playback (секунды)
 MATCH_FRAGMENT_DURATION = 8.0
+HTML_FRAGMENT_DURATION = MATCH_FRAGMENT_DURATION  # алиас для совместимости
 
 # =============================================================================
 # ПАРАМЕТРЫ ЭМОЦИОНАЛЬНОЙ РАЗМЕТКИ

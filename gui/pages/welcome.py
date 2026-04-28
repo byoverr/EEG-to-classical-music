@@ -3,18 +3,20 @@
 """
 from __future__ import annotations
 
+import webbrowser
 from datetime import datetime
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QPushButton, QFrame, QScrollArea,
+    QPushButton, QFrame, QScrollArea, QSizePolicy,
     QMessageBox,
 )
 
 from gui.history import load_history, delete_run
-from gui.styles import PRIMARY, TEXT_SECONDARY
+from gui.styles import PRIMARY, ACCENT, TEXT_SECONDARY, EMOTION_COLORS
 
 
 class _HistoryCard(QFrame):
@@ -64,11 +66,11 @@ class _HistoryCard(QFrame):
         if params:
             parts = []
             if "max_classical" in params:
-                parts.append(f"Classical: {params['max_classical']}")
+                parts.append(f"Произведений: {params['max_classical']}")
             if "window_size" in params:
-                parts.append(f"Window: {params['window_size']}s")
+                parts.append(f"Окно: {params['window_size']} сек")
             if "top_k" in params:
-                parts.append(f"Top-K: {params['top_k']}")
+                parts.append(f"Топ-N: {params['top_k']}")
             if parts:
                 lbl_p = QLabel("  ·  ".join(parts))
                 lbl_p.setStyleSheet("color:#888; font-size:11px;")
@@ -80,6 +82,14 @@ class _HistoryCard(QFrame):
         btn_open.setObjectName("secondary")
         btn_open.clicked.connect(lambda: self.open_requested.emit(self.entry))
         btn_row.addWidget(btn_open)
+
+        report_dir = entry.get("report_dir", "")
+        html = Path(report_dir) / "index.html" if report_dir else None
+        if html and html.exists():
+            btn_html = QPushButton("HTML")
+            btn_html.setObjectName("link")
+            btn_html.clicked.connect(lambda: webbrowser.open(f"file://{html}"))
+            btn_row.addWidget(btn_html)
 
         btn_row.addStretch()
         btn_del = QPushButton("Удалить")
@@ -106,10 +116,9 @@ class WelcomePage(QWidget):
         root.setSpacing(0)
 
         # ── Title block ──
-        title = QLabel("Преобразование сигналов ЭЭГ в музыкальные структуры")
+        title = QLabel("EEG → Classical Music")
         title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet(f"font-size:22px; font-weight:700; color:{PRIMARY}; margin-bottom:2px;")
-        title.setWordWrap(True)
+        title.setStyleSheet(f"font-size:32px; font-weight:700; color:{PRIMARY}; margin-bottom:2px;")
         root.addWidget(title)
 
         subtitle = QLabel("Анализ ЭЭГ-сигналов и сравнение с классическими произведениями")
