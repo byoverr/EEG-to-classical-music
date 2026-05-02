@@ -27,7 +27,7 @@ RUNS_DIR = PROJECT_ROOT / "runs"
 DEFAULT_RUN_ID = "run_001"
 
 # Псевдо-разметка MAESTRO (кэш)
-MAESTRO_PSEUDO_LABELS_PATH = RUNS_DIR / "maestro_labeling_20260420_183814" / "maestro_predictions.csv"
+MAESTRO_PSEUDO_LABELS_PATH = PROJECT_ROOT / "data" / "maestro_labeling" / "maestro_predictions.csv"
 
 # =============================================================================
 # ПАРАМЕТРЫ DEAP ДАТАСЕТА

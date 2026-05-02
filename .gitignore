@@ -35,7 +35,12 @@ MANIFEST
 
 diploma_*.txt
 diploma.txt
+emotion_discussion.txt
+
+
 *.docx
+
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
@@ -86,6 +91,7 @@ target/
 
 # Generated project artifacts
 runs/
+data/cache/
 data/best_matches/
 data/reports/
 data/maestro-v3.0.0/

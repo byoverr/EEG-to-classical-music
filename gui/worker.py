@@ -988,7 +988,7 @@ class PipelineWorker(QThread):
             _user_eeg_emotion = (
                 self._eeg_emotions.get(str(eeg_path))
                 or self._eeg_emotions.get(eeg_path.name)
-                or "EEG"
+                or "HVLA"
             )
             self._log(f"  Эмоция: {_user_eeg_emotion}")
 
@@ -1498,10 +1498,26 @@ class PipelineWorker(QThread):
             elif eeg_frag:
                 create_midi_from_notes(eeg_frag, str(eeg_mid_out), tempo_bpm=tempo)
             elif eeg_midi_path.exists():
+                # Вырезаем только фрагмент, чтобы не копировать полный 62-секундный MIDI
                 try:
-                    shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
+                    import music21 as _m21
+                    _src = _m21.converter.parse(str(eeg_midi_path))
+                    _frag_dur = float(MATCH_FRAGMENT_DURATION)
+                    _frag_stream = _src.flatten().getElementsByOffset(
+                        eeg_start, eeg_start + _frag_dur,
+                        includeEndBoundary=False,
+                        mustBeginInSpan=True,
+                    )
+                    if len(list(_frag_stream.notes)) >= 1:
+                        _out_stream = _m21.stream.Stream(_frag_stream)
+                        _out_stream.write("midi", fp=str(eeg_mid_out))
+                    else:
+                        shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
                 except Exception:
-                    pass
+                    try:
+                        shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
+                    except Exception:
+                        pass
 
             cla_mid_name = f"{prefix}{variant_prefix}Classical_{safe_comp}_{safe_title}.mid"
             cla_mid_out = matches_out / cla_mid_name

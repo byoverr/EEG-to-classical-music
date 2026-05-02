@@ -89,27 +89,92 @@ def detect_events_robust(signal_array: np.ndarray, fs: float):
     )
 
 
+def _save_signal_snapshot_deap(
+    snapshot_dir: Path,
+    participant_id: str,
+    trial_idx: int,
+    variant_name: str,
+    signal: np.ndarray,
+    motifs: list,
+    midi_path: Path,
+) -> None:
+    """Сохраняет снимок EEG-сигнала для DEAP .dat триала (для вкладки «Преобразование»)."""
+    import json as _json
+
+    snapshot_dir.mkdir(parents=True, exist_ok=True)
+
+    sig = np.asarray(signal, dtype=float).ravel()
+    if sig.size == 0:
+        return
+
+    fs = float(DEAP_SAMPLE_RATE)
+    duration_sec = float(sig.size) / fs
+
+    MAX_POINTS = 2500
+    if sig.size > MAX_POINTS:
+        idx = np.linspace(0, sig.size - 1, MAX_POINTS).astype(int)
+        sig_down = sig[idx]
+        t_down = (idx / fs).tolist()
+    else:
+        sig_down = sig
+        t_down = (np.arange(sig.size) / fs).tolist()
+
+    motifs_out = [
+        {
+            "onset_time": float(m.get("onset_time", 0.0)),
+            "peak_time": float(m.get("peak_time", 0.0)),
+            "duration": float(m.get("duration", 0.0)),
+            "peak_amplitude": float(m.get("peak_amplitude", 0.0)),
+            "rise_time": float(m.get("rise_time", 0.0)),
+        }
+        for m in (motifs or [])
+    ]
+
+    payload = {
+        "participant_id": participant_id,
+        "variant": variant_name,
+        "trial_idx": trial_idx,
+        "fs": fs,
+        "duration_sec": duration_sec,
+        "n_samples": int(sig.size),
+        "signal_mean": float(np.mean(sig)),
+        "signal_std": float(np.std(sig)) if sig.size > 1 else 0.0,
+        "threshold_low_std": float(EEG_THRESHOLD_LOW_STD),
+        "threshold_high_std": float(EEG_THRESHOLD_HIGH_STD),
+        "time": t_down,
+        "signal": sig_down.tolist(),
+        "motifs": motifs_out,
+        "midi_path": str(midi_path),
+    }
+
+    snap_name = f"{participant_id}_trial{trial_idx:02d}_{variant_name}.json"
+    snap_path = snapshot_dir / snap_name
+    snap_path.write_text(_json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+
+
 def create_eeg_variants(signal_data: dict, output_dir: Path,
                        participant_id: str, trial_idx: int,
-                       reuse: bool = None) -> dict:
+                       reuse: bool = None,
+                       snapshot_dir: Path = None) -> dict:
     """
     Создаёт несколько вариантов MIDI из ЭЭГ сигналов.
-    
+
     Варианты:
     - original: из Fp1 канала (фронтальный, наиболее информативный)
     - smoothed: из сглаженного Fp1
     - pca: из первых трёх главных компонент (первая используется для sonification)
-    
+
     Использует параметры из config.py для детекции волн.
     Если reuse=True, пропускает генерацию для уже существующих файлов.
-    
+    Если snapshot_dir задан — сохраняет снимок сигнала для вкладки «Преобразование».
+
     Возвращает словарь {variant_name: midi_path}
     """
     from scipy.signal import find_peaks, butter, filtfilt
-    
+
     if reuse is None:
         reuse = REUSE_EEG_MIDI
-    
+
     output_dir.mkdir(parents=True, exist_ok=True)
     midi_paths = {}
     variants = {
@@ -117,7 +182,7 @@ def create_eeg_variants(signal_data: dict, output_dir: Path,
         'smoothed': signal_data['smoothed'],
         'pca': signal_data['pca']
     }
-    
+
     for variant_name, signal_array in variants.items():
         # Проверяем, можно ли переиспользовать ранее созданный MIDI
         midi_filename = f"{participant_id}_trial{trial_idx:02d}_{variant_name}.mid"
@@ -126,7 +191,7 @@ def create_eeg_variants(signal_data: dict, output_dir: Path,
             midi_paths[variant_name] = midi_path
             print(f"  ♻ {variant_name}: reused {midi_filename}")
             continue
-        
+
         # Извлекаем 1D сигнал правильно
         if signal_array.ndim > 1:
             if variant_name == 'pca':
@@ -138,28 +203,38 @@ def create_eeg_variants(signal_data: dict, output_dir: Path,
                 analysis_signal = signal_array[0, :]
         else:
             analysis_signal = signal_array
-        
+
         # Очистка от NaN/Inf
         analysis_signal = np.nan_to_num(analysis_signal, nan=0.0, posinf=0.0, neginf=0.0)
-        
+
         # Детектируем события с робастным методом
         motifs = detect_events_robust(analysis_signal, DEAP_SAMPLE_RATE)
-        
+
         if not motifs:
             print(f"  ✗ {variant_name}: no events detected")
             continue
-        
+
         # Преобразуем в музыкальные события
         music_events = map_motifs_to_adsr_sounds(motifs, scale_key=EEG_SCALE_KEY)
-        
+
         if music_events:
             # Сохраняем MIDI
             create_midi_with_precise_timing(music_events, str(midi_path))
             midi_paths[variant_name] = midi_path
             print(f"  ✓ {variant_name}: {len(music_events)} events → {midi_filename}")
+
+            # Сохраняем снимок сигнала для вкладки «Преобразование»
+            if snapshot_dir is not None:
+                try:
+                    _save_signal_snapshot_deap(
+                        snapshot_dir, participant_id, trial_idx,
+                        variant_name, analysis_signal, motifs, midi_path,
+                    )
+                except Exception as _e:
+                    print(f"  snapshot save failed ({variant_name}): {_e}")
         else:
             print(f"  ✗ {variant_name}: no music events generated")
-    
+
     return midi_paths
 
 
@@ -236,7 +311,7 @@ def _process_trial(args):
     from src.eeg_preprocessing import prepare_signal_data
     from src.deap_loader import load_deap_participant_data, get_emotion_labels
     
-    # Support both 4-tuple and 6-tuple signatures
+    # Support 4-tuple, 6-tuple signatures
     if len(args) == 6:
         participant_file, trial_idx, eeg_midi_dir, match_emotions, COMPARISON_WINDOW_SIZE, COMPARISON_HOP_SIZE = args
     else:
@@ -244,24 +319,31 @@ def _process_trial(args):
         COMPARISON_WINDOW_SIZE = _DEFAULT_WINDOW
         COMPARISON_HOP_SIZE = _DEFAULT_HOP
     participant_id = Path(participant_file).stem
+    eeg_midi_dir = Path(eeg_midi_dir)
+    # Snapshot dir derived from eeg_midi_dir: runs/run_xxx/eeg_midi → runs/run_xxx/report/signal_snapshots
+    _snapshot_dir = eeg_midi_dir.parent / "report" / "signal_snapshots"
     results = []
-    
+
     try:
         data = load_deap_participant_data(str(participant_file))
         labels = get_emotion_labels(data, trial_idx)
         valence = labels.get('valence', 5.0)
         arousal = labels.get('arousal', 5.0)
-        
+
         # Вычисляем эмоциональный квадрант для EEG
         eeg_emotion = deap_to_emotion_quadrant(valence, arousal, threshold=EMOTION_THRESHOLD)
-        
+
         signal_data = prepare_signal_data(data, trial_idx)
-        
+        # DEAP trial duration (8064 samples at 128 Hz = 63 s)
+        _orig = signal_data.get('original')
+        _trial_duration_sec = float(_orig.shape[-1]) / float(DEAP_SAMPLE_RATE) if _orig is not None else 63.0
+
         eeg_midi_paths = create_eeg_variants(
             signal_data,
             eeg_midi_dir,
             participant_id,
             trial_idx,
+            snapshot_dir=_snapshot_dir,
         )
         
         if not eeg_midi_paths:
@@ -502,6 +584,7 @@ def _process_trial(args):
                             'eeg_emotion': eeg_emotion,
                             'eeg_source_file': Path(participant_file).name,
                             'eeg_midi': str(eeg_midi_path),
+                            'eeg_recording_duration_sec': _trial_duration_sec,
                             'classical_piece': row['classical_piece'],
                             'classical_dataset': row.get('classical_dataset', 'maestro'),
                             'classical_track_id': row.get('classical_track_id', ''),
@@ -525,6 +608,10 @@ def _process_trial(args):
                             'cla_pitch_std': row.get('cla_pitch_std', 0),
                             'eeg_pitch_range': row.get('eeg_pitch_range', 0),
                             'cla_pitch_range': row.get('cla_pitch_range', 0),
+                            'classical_window_pitches': row.get('classical_window_pitches', []),
+                            'classical_window_velocities': row.get('classical_window_velocities', []),
+                            'classical_window_ioi': row.get('classical_window_ioi', []),
+                            'classical_window_durations': row.get('classical_window_durations', []),
                             'rank': row['rank']
                         })
             except Exception as e:

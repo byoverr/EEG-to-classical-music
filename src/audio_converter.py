@@ -8,44 +8,54 @@ from pathlib import Path
 
 def find_soundfont():
     """
-    Находит доступный SoundFont файл для FluidSynth
-    
-    Возвращает:
-    - путь к SoundFont файлу или None
+    Находит доступный SoundFont файл для FluidSynth.
+    Возвращает путь к .sf2 файлу или None.
     """
+    import glob
     system = platform.system()
-    
-    # Список возможных путей к SoundFont
+
     possible_paths = []
-    
+
     if system == "Darwin":  # macOS
         possible_paths = [
-            # Проверяем стандартные пути на Mac
             Path.home() / ".fluidsynth" / "default_sound_font.sf2",
             "/opt/homebrew/share/soundfonts/default.sf2",
             "/usr/local/share/soundfonts/default.sf2",
             "/usr/share/soundfonts/default.sf2",
-            # Проверяем в проекте
             Path(__file__).parent.parent / "data" / "FluidR3_GM.sf2",
         ]
+        # Поиск любого .sf2 в Homebrew (fluid-synth устанавливает в Cellar)
+        for pattern in [
+            "/opt/homebrew/share/fluid-synth/sf2/*.sf2",
+            "/opt/homebrew/Cellar/fluid-synth/*/share/fluid-synth/sf2/*.sf2",
+            "/usr/local/share/fluid-synth/sf2/*.sf2",
+        ]:
+            matches = sorted(glob.glob(pattern))
+            possible_paths.extend(matches)
     elif system == "Linux":
         possible_paths = [
             "/usr/share/sounds/sf2/default.sf2",
+            "/usr/share/sounds/sf2/FluidR3_GM.sf2",
             "/usr/share/soundfonts/default.sf2",
             Path(__file__).parent.parent / "data" / "FluidR3_GM.sf2",
         ]
+        for pattern in ["/usr/share/sounds/sf2/*.sf2", "/usr/share/soundfonts/*.sf2"]:
+            possible_paths.extend(sorted(glob.glob(pattern)))
     elif system == "Windows":
         possible_paths = [
             Path(__file__).parent.parent / "data" / "FluidR3_GM.sf2",
             "C:/Program Files/FluidSynth/soundfonts/default.sf2",
         ]
-    
-    # Проверяем каждый путь
+
+    seen = set()
     for path in possible_paths:
         p = Path(path)
+        if p in seen:
+            continue
+        seen.add(p)
         if p.exists() and p.is_file():
             return str(p)
-    
+
     return None
 
 import subprocess

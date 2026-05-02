@@ -90,8 +90,13 @@ class _FileDropArea(QFrame):
             self.files_changed.emit()
 
     def _remove_selected(self):
-        for item in self._list.selectedItems():
-            self._list.takeItem(self._list.row(item))
+        # Удаляем с конца, чтобы индексы не сдвигались
+        rows = sorted(
+            {self._list.row(item) for item in self._list.selectedItems()},
+            reverse=True,
+        )
+        for row in rows:
+            self._list.takeItem(row)
         self.files_changed.emit()
 
     def _all(self) -> set[str]:
@@ -127,19 +132,18 @@ class _FileEmotionRow(QFrame):
         lay.addWidget(name_lbl, stretch=1)
 
         self.combo = QComboBox()
-        self.combo.addItem("Авто", "auto")
         self.combo.addItem("Радостный / Возбуждённый (HVHA)", "HVHA")
         self.combo.addItem("Спокойный / Умиротворённый (HVLA)", "HVLA")
         self.combo.addItem("Злой / Напряжённый (LVHA)", "LVHA")
         self.combo.addItem("Грустный / Подавленный (LVLA)", "LVLA")
+        self.combo.setCurrentIndex(1)  # HVLA по умолчанию
         self.combo.setMinimumWidth(240)
         self.combo.setStyleSheet("border: none;")
         lay.addWidget(self.combo)
 
-    def get_emotion(self) -> str | None:
-        """Возвращает выбранную эмоцию или None для 'auto'."""
-        val = self.combo.currentData()
-        return val if val != "auto" else None
+    def get_emotion(self) -> str:
+        """Возвращает выбранную эмоцию."""
+        return self.combo.currentData()
 
 
 # ── EEG file info card ──────────────────────────────────────────────────────
