@@ -65,6 +65,9 @@ class PipelineWorker(QThread):
         max_seconds: Optional[float] = None,
         eeg_emotions: Optional[dict[str, str | None]] = None,
         seed: Optional[int] = None,
+        compare_modes: bool = False,
+        target_emotion: Optional[str] = None,
+        manual_midi_path: Optional[str] = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -89,6 +92,9 @@ class PipelineWorker(QThread):
         self._max_seconds = max_seconds
         self._eeg_emotions = eeg_emotions or {}  # {filepath: emotion_str | None}
         self.seed = seed
+        self.compare_modes = compare_modes
+        self.target_emotion = target_emotion
+        self.manual_midi_path = manual_midi_path
         self._cancelled = False
 
     # ------------------------------------------------------------------
@@ -221,24 +227,48 @@ class PipelineWorker(QThread):
         if use_maestro and maestro_limit > 0:
             self._log("[MAESTRO] Загрузка…")
             all_maestro = get_maestro_midi_files(str(MAESTRO_DIR), max_files=None)
+            # Фильтрация по эмоции (только если не сравниваем оба режима)
+            if self.target_emotion and not self.compare_modes:
+                try:
+                    _pseudo_df = pd.read_csv(MAESTRO_PSEUDO_LABELS_PATH)
+                    _emo_ids = set(
+                        _pseudo_df[_pseudo_df["emotion"] == self.target_emotion]["track_id"].astype(str)
+                    )
+                    _filtered = [p for p in all_maestro if Path(p).stem in _emo_ids]
+                    if _filtered:
+                        all_maestro = _filtered
+                        self._log(f"[MAESTRO] Фильтр {self.target_emotion}: {len(_filtered)} треков")
+                    else:
+                        self._log(f"[MAESTRO] Псевдо-метки не дали результата, берём всё")
+                except Exception as e:
+                    self._log(f"[MAESTRO] Псевдо-метки недоступны: {e}")
             random.shuffle(all_maestro)
             maestro_files = all_maestro[: maestro_limit]
-            self._log(f"[MAESTRO] {len(maestro_files)} произведений")
+            self._log(f"[MAESTRO] {len(maestro_files)} произведений используется")
 
         emopia_files: list[str] = []
         if use_emopia and emopia_limit > 0:
             try:
                 self._log("[EMOPIA] Загрузка…")
                 all_emopia = get_emopia_midi_files(str(EMOPIA_DIR), max_files=EMOPIA_MAX_TRACKS)
+                # Фильтрация по эмоции (только если не сравниваем оба режима)
+                if self.target_emotion and not self.compare_modes:
+                    _filtered_e = [
+                        p for p in all_emopia
+                        if get_emopia_metadata(Path(p).stem).get("emotion") == self.target_emotion
+                    ]
+                    if _filtered_e:
+                        all_emopia = _filtered_e
+                        self._log(f"[EMOPIA] Фильтр {self.target_emotion}: {len(_filtered_e)} треков")
                 random.shuffle(all_emopia)
                 emopia_files = all_emopia[: emopia_limit]
-                self._log(f"[EMOPIA] {len(emopia_files)} произведений")
+                self._log(f"[EMOPIA] {len(emopia_files)} произведений используется")
             except Exception as e:
                 self._log(f"[EMOPIA] Ошибка: {e}")
 
         all_classical = maestro_files + emopia_files
         self._log(f"Всего произведений: {len(all_classical)}")
-        if not all_classical:
+        if not all_classical and not self.manual_midi_path:
             self.finished_error.emit("Не найдены MIDI файлы для сравнения.")
             return
 
@@ -332,6 +362,26 @@ class PipelineWorker(QThread):
                     }
 
             save_feature_cache(feature_cache_path, feature_cache)
+
+        # ── Manual MIDI: добавляем в пул произведений до построения кэша ──
+        _manual_key = None
+        if self.manual_midi_path:
+            try:
+                _mp = Path(self.manual_midi_path)
+                _manual_key = f"manual|{_mp.stem}|Manual - {_mp.stem}"
+                classical_dict[_manual_key] = str(_mp)
+                classical_meta_map[_manual_key] = {
+                    "dataset": "manual",
+                    "track_id": _mp.stem,
+                    "composer": "Manual",
+                    "title": _mp.stem,
+                    "emotion": None,
+                    "emotion_source": None,
+                }
+                self._log(f"[manual] Добавлен в сравнение: {_mp.name}")
+            except Exception as _e:
+                self._log(f"[manual] Ошибка добавления MIDI: {_e}")
+                _manual_key = None
 
         if self._cancelled:
             return
@@ -622,6 +672,51 @@ class PipelineWorker(QThread):
         self._emit(*STAGE_GENERATE_EXPORTS)
         self._export_charts(results_df, report_dir)
 
+        # Помечаем стратегию поиска для всех базовых результатов
+        if not comp_df.empty:
+            comp_df["search_strategy"] = "all"
+
+        # ===== [extra] Compare modes: второй проход по эмоции ================
+        if self.compare_modes and self.target_emotion and not comp_df.empty:
+            self._log(f"[compare_modes] Второй проход: эмоция {self.target_emotion}…")
+            try:
+                # Фильтруем classical_dict по нужной эмоции
+                emo_classical_dict = {
+                    k: v for k, v in classical_dict.items()
+                    if classical_meta_map.get(k, {}).get("emotion") == self.target_emotion
+                }
+                if emo_classical_dict:
+                    self._log(f"[compare_modes] {len(emo_classical_dict)} треков эмоции {self.target_emotion}")
+                    # Build windows cache for emotion-filtered subset
+                    emo_windows_cache = {
+                        k: v for k, v in classical_windows_cache.items()
+                        if k in emo_classical_dict
+                    }
+                    emo_rows = self._process_neurosoft_files(
+                        eeg_neurosoft, eeg_midi_dir, emo_windows_cache,
+                        emo_classical_dict, classical_meta_map,
+                    )
+                    if emo_rows:
+                        emo_df = pd.DataFrame(emo_rows)
+                        emo_df["search_strategy"] = self.target_emotion
+                        comp_df = pd.concat([comp_df, emo_df], ignore_index=True)
+                        self._log(f"[compare_modes] Добавлено {len(emo_rows)} строк")
+                else:
+                    self._log(f"[compare_modes] Нет треков с эмоцией {self.target_emotion}")
+            except Exception as e:
+                self._log(f"[compare_modes] Ошибка второго прохода: {e}")
+
+        # ===== [extra] Пометить строки ручного MIDI в search_strategy ==========
+        if _manual_key and not comp_df.empty and "search_strategy" in comp_df.columns:
+            # Строки где classical track == manual — помечаем отдельно
+            mask = comp_df.get("classical_track", pd.Series(dtype=str)).str.startswith("manual|", na=False)
+            if not mask.any():
+                # fallback: ищем по composer или title
+                mask = (comp_df.get("composer", pd.Series(dtype=str)) == "Manual")
+            comp_df.loc[mask, "search_strategy"] = "manual"
+            if mask.any():
+                self._log(f"[manual] Помечено строк как manual: {mask.sum()}")
+
         self._emit(*STAGE_DONE)
         self._log("═" * 50)
         self._log("Пайплайн завершён!")
@@ -893,7 +988,7 @@ class PipelineWorker(QThread):
             _user_eeg_emotion = (
                 self._eeg_emotions.get(str(eeg_path))
                 or self._eeg_emotions.get(eeg_path.name)
-                or "EEG"
+                or "HVLA"
             )
             self._log(f"  Эмоция: {_user_eeg_emotion}")
 
@@ -1403,10 +1498,26 @@ class PipelineWorker(QThread):
             elif eeg_frag:
                 create_midi_from_notes(eeg_frag, str(eeg_mid_out), tempo_bpm=tempo)
             elif eeg_midi_path.exists():
+                # Вырезаем только фрагмент, чтобы не копировать полный 62-секундный MIDI
                 try:
-                    shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
+                    import music21 as _m21
+                    _src = _m21.converter.parse(str(eeg_midi_path))
+                    _frag_dur = float(MATCH_FRAGMENT_DURATION)
+                    _frag_stream = _src.flatten().getElementsByOffset(
+                        eeg_start, eeg_start + _frag_dur,
+                        includeEndBoundary=False,
+                        mustBeginInSpan=True,
+                    )
+                    if len(list(_frag_stream.notes)) >= 1:
+                        _out_stream = _m21.stream.Stream(_frag_stream)
+                        _out_stream.write("midi", fp=str(eeg_mid_out))
+                    else:
+                        shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
                 except Exception:
-                    pass
+                    try:
+                        shutil.copy(str(eeg_midi_path), str(eeg_mid_out))
+                    except Exception:
+                        pass
 
             cla_mid_name = f"{prefix}{variant_prefix}Classical_{safe_comp}_{safe_title}.mid"
             cla_mid_out = matches_out / cla_mid_name

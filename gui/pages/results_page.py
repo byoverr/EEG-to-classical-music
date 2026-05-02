@@ -8,12 +8,13 @@ import json
 import os
 import platform
 import subprocess
+import threading
 from html import escape
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QObject
 from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QFrame,
@@ -57,49 +58,38 @@ def _register_audio_button(button: QPushButton, default_text: str):
     _registered_audio_buttons.append((button, default_text))
 
 
-def _play_audio(path_str: str):
-    path = Path(path_str)
-    if not path.exists():
-        wav_path = path.with_suffix(".wav")
-        path = wav_path if wav_path.exists() else path
-    if path.suffix.lower() == ".mid" and not path.with_suffix(".wav").exists():
-        try:
-            from src.audio_converter import midi_to_wav, find_soundfont
-            sf = find_soundfont()
-            wav_path = path.with_suffix(".wav")
-            if sf and midi_to_wav(str(path), str(wav_path), sf):
-                path = wav_path
-        except Exception:
-            pass
-    elif path.suffix.lower() == ".mid" and path.with_suffix(".wav").exists():
-        path = path.with_suffix(".wav")
-    if not path.exists():
-        return None
+class _ConversionBridge(QObject):
+    """Мост для передачи результата конвертации из фонового потока в UI-поток."""
+    done = Signal(str, str)   # (token, wav_path_or_empty)
 
+
+def _launch_audio_process(path: Path):
+    """Запускает аудиоплеер, возвращает Popen или None."""
     system = platform.system()
     try:
         if system == "Darwin":
-            if path.suffix.lower() == ".wav":
-                proc = subprocess.Popen(["afplay", str(path)])
-            else:
-                proc = subprocess.Popen(["open", str(path)])
+            proc = subprocess.Popen(
+                ["afplay", str(path)] if path.suffix.lower() == ".wav" else ["open", str(path)]
+            )
         elif system == "Linux":
-            if path.suffix.lower() == ".wav":
-                proc = subprocess.Popen(["aplay", str(path)])
-            else:
-                proc = subprocess.Popen(["xdg-open", str(path)])
+            proc = subprocess.Popen(
+                ["aplay", str(path)] if path.suffix.lower() == ".wav" else ["xdg-open", str(path)]
+            )
         elif system == "Windows":
             proc = subprocess.Popen(["cmd", "/c", "start", "", str(path)], shell=False)
         else:
             return None
         _active_audio_processes.append(proc)
-        return str(path)
+        return proc
     except Exception:
         return None
 
 
 def _toggle_audio(path_str: str, button: QPushButton, default_text: str):
+    """Нажатие кнопки «Слушать»: если нужна конвертация — делает её в фоне,
+    не блокируя UI. Уже готовый WAV играет мгновенно."""
     global _current_audio_token
+
     if _current_audio_token == path_str and _active_audio_processes:
         _stop_all_audio()
         _reset_audio_buttons()
@@ -108,10 +98,67 @@ def _toggle_audio(path_str: str, button: QPushButton, default_text: str):
 
     _stop_all_audio()
     _reset_audio_buttons()
-    token = _play_audio(path_str)
-    if token:
+    _current_audio_token = path_str
+
+    path = Path(path_str)
+    wav_path = path.with_suffix(".wav")
+
+    # WAV уже есть — играем сразу
+    if wav_path.exists():
         button.setText("Остановить")
-        _current_audio_token = path_str
+        _launch_audio_process(wav_path)
+        return
+
+    # Не MIDI — пробуем открыть как есть
+    if path.suffix.lower() != ".mid":
+        if path.exists():
+            button.setText("Остановить")
+            _launch_audio_process(path)
+        return
+
+    # MIDI без WAV — конвертируем в фоне через сигнал Qt
+    button.setText("Конвертация…")
+    button.setEnabled(False)
+    token_at_click = path_str
+
+    bridge = _ConversionBridge()
+
+    def _on_done(token: str, result_path: str):
+        # вызывается в UI-потоке (Qt доставляет сигнал туда, где живёт bridge)
+        try:
+            button.setEnabled(True)
+        except RuntimeError:
+            return
+        if _current_audio_token != token:
+            # пользователь уже нажал «стоп» пока конвертировали
+            try:
+                button.setText(default_text)
+            except RuntimeError:
+                pass
+            return
+        try:
+            if result_path:
+                button.setText("Остановить")
+                _launch_audio_process(Path(result_path))
+            else:
+                button.setText(default_text)
+        except RuntimeError:
+            pass
+
+    bridge.done.connect(_on_done, Qt.QueuedConnection)
+
+    def _convert():
+        result = ""
+        try:
+            from src.audio_converter import midi_to_wav, find_soundfont
+            sf = find_soundfont()
+            if sf and midi_to_wav(str(path), str(wav_path), sf) and wav_path.exists():
+                result = str(wav_path)
+        except Exception:
+            pass
+        bridge.done.emit(token_at_click, result)
+
+    threading.Thread(target=_convert, daemon=True).start()
 
 
 def _fmt_score(value) -> str:
@@ -1572,8 +1619,10 @@ class ResultsPage(QWidget):
 
         self._filter_emotion = QComboBox()
         self._filter_emotion.addItem("Эмоция: Все", "all")
-        for emo in ("HVHA", "HVLA", "LVHA", "LVLA"):
-            self._filter_emotion.addItem(emo, emo)
+        self._filter_emotion.addItem("Радостный / Возбуждённый (HVHA)", "HVHA")
+        self._filter_emotion.addItem("Спокойный / Умиротворённый (HVLA)", "HVLA")
+        self._filter_emotion.addItem("Злой / Напряжённый (LVHA)", "LVHA")
+        self._filter_emotion.addItem("Грустный / Подавленный (LVLA)", "LVLA")
         self._filter_emotion.currentIndexChanged.connect(self._apply_filter)
         top_lay.addWidget(self._filter_emotion)
 
@@ -1593,6 +1642,96 @@ class ResultsPage(QWidget):
         self._content.setContentsMargins(20, 14, 20, 14)
         self._content.setSpacing(12)
         root.addLayout(self._content, stretch=1)
+
+    # ------------------------------------------------------------------
+    # Extra tabs: Ручной MIDI, Сравнение стратегий
+    # ------------------------------------------------------------------
+
+    def _build_manual_midi_tab(self, df: pd.DataFrame) -> QWidget:
+        """Вкладка с результатами сравнения с ручным MIDI."""
+        from gui.styles import PRIMARY, TEXT_SECONDARY, BG_CARD
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(12, 12, 12, 12)
+        lay.setSpacing(10)
+
+        title = QLabel("Сравнение с выбранным вручную MIDI-файлом")
+        title.setStyleSheet(f"font-size:15px; font-weight:600; color:{PRIMARY};")
+        lay.addWidget(title)
+
+        for rank, row in enumerate(df.to_dict("records"), start=1):
+            card = _MatchCard(row, rank)
+            lay.addWidget(card)
+
+        lay.addStretch()
+        return w
+
+    def _build_strategy_comparison(self, df: pd.DataFrame) -> QWidget:
+        """Вкладка сравнения двух стратегий поиска."""
+        from gui.styles import PRIMARY, TEXT_SECONDARY, BG_CARD, BORDER
+        w = QWidget()
+        lay = QVBoxLayout(w)
+        lay.setContentsMargins(16, 16, 16, 16)
+        lay.setSpacing(14)
+
+        title = QLabel("Сравнение стратегий поиска")
+        title.setStyleSheet(f"font-size:16px; font-weight:700; color:{PRIMARY};")
+        lay.addWidget(title)
+
+        strategies = df["search_strategy"].unique().tolist()
+        metrics = [
+            ("combined_similarity", "Итоговое сходство"),
+            ("music_match_score",   "Совпадение музыки"),
+            ("contour_similarity",  "Контур"),
+            ("feature_similarity",  "Сходство признаков"),
+        ]
+
+        # Build summary table
+        grid = QGridLayout()
+        grid.setSpacing(8)
+
+        # Header
+        header_strat = QLabel("Стратегия")
+        header_strat.setStyleSheet(f"font-weight:700; color:{TEXT_SECONDARY};")
+        grid.addWidget(header_strat, 0, 0)
+        for ci, (_, name) in enumerate(metrics):
+            h = QLabel(name)
+            h.setStyleSheet(f"font-weight:700; color:{TEXT_SECONDARY};")
+            grid.addWidget(h, 0, ci + 1)
+
+        for ri, strat in enumerate(strategies):
+            sub = df[df["search_strategy"] == strat]
+            strat_label = {
+                "all": "Все произведения",
+                "manual": "Ручной MIDI",
+            }.get(strat, strat)
+            lbl = QLabel(strat_label)
+            lbl.setStyleSheet(f"font-weight:600;")
+            grid.addWidget(lbl, ri + 1, 0)
+            for ci, (col, _) in enumerate(metrics):
+                if col in sub.columns:
+                    val = float(sub[col].mean())
+                    cell = QLabel(f"{val:.3f}")
+                    cell.setAlignment(Qt.AlignCenter)
+                    grid.addWidget(cell, ri + 1, ci + 1)
+
+        frame = QFrame()
+        frame.setStyleSheet(f"QFrame {{ background:{BG_CARD}; border:1px solid {BORDER}; border-radius:8px; padding:8px; }}")
+        frame.setLayout(grid)
+        lay.addWidget(frame)
+
+        # Verdict
+        sim_col = "combined_similarity" if "combined_similarity" in df.columns else "music_match_score"
+        if sim_col in df.columns:
+            best_strat = df.groupby("search_strategy")[sim_col].mean().idxmax()
+            best_label = {"all": "Все произведения", "manual": "Ручной MIDI"}.get(best_strat, best_strat)
+            verdict = QLabel(f"Лучшая стратегия по среднему сходству: {best_label}")
+            verdict.setStyleSheet(f"font-size:13px; color:{PRIMARY}; font-weight:600; padding:8px 0;")
+            lay.addWidget(verdict)
+
+        lay.addStretch()
+        return w
+
 
     def load_results(self, df: pd.DataFrame, report_dir: str):
         self._df = df.copy()
@@ -1715,6 +1854,19 @@ class ResultsPage(QWidget):
         self._tabs.addTab(_wrap_scroll(self._build_emotion_tab(df)), "Эмоции")
         self._tabs.addTab(_wrap_scroll(self._build_summary_tab(df)), "Отчёт")
 
+        # Вкладка «Ручной MIDI» — если есть результаты ручного сравнения
+        if "search_strategy" in df.columns and (df["search_strategy"] == "manual").any():
+            manual_df = df[df["search_strategy"] == "manual"]
+            self._tabs.addTab(
+                _wrap_scroll(self._build_manual_midi_tab(manual_df)), "Ручной MIDI"
+            )
+
+        # Вкладка «Сравнение стратегий» — если сравнивали два режима
+        if "search_strategy" in df.columns and df["search_strategy"].nunique() > 1:
+            self._tabs.addTab(
+                _wrap_scroll(self._build_strategy_comparison(df)), "⚖ Сравнение"
+            )
+
     def _build_matches_tab(self, df: pd.DataFrame) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -1730,7 +1882,7 @@ class ResultsPage(QWidget):
             ranked = df.sort_values("combined_similarity", ascending=False)
         else:
             ranked = df
-        for rank, row in enumerate(ranked.head(5).to_dict("records"), start=1):
+        for rank, row in enumerate(ranked.head(len(df)).to_dict("records"), start=1):
             lay.addWidget(_MatchCard(row, rank))
         lay.addStretch()
         scroll.setWidget(content)
@@ -1866,7 +2018,7 @@ class ResultsPage(QWidget):
         best_piece = f"{best_row.get('composer', 'Unknown')} — {best_row.get('title', 'Unknown')}"
         best_score = float(best_row.get("music_match_score", best_row.get("combined_similarity", 0.0)) or 0.0)
 
-        topk_emotions = ranked.head(5)["classical_emotion"].dropna().astype(str) \
+        topk_emotions = ranked["classical_emotion"].dropna().astype(str) \
             if "classical_emotion" in ranked.columns else pd.Series(dtype=str)
         topk_match_count = int((topk_emotions == eeg_emotion).sum()) if eeg_emotion not in {"", "—"} else 0
         topk_total = len(topk_emotions)
@@ -2071,23 +2223,37 @@ class ResultsPage(QWidget):
         if "eeg_emotion" in df.columns:
             n_per_emotion = df.groupby("eeg_emotion").size().to_dict()
 
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        grid.setContentsMargins(0, 0, 0, 0)
-        positions = [("HVHA", 0, 0), ("HVLA", 0, 1), ("LVLA", 1, 0), ("LVHA", 1, 1)]
-        for emo, row_, col_ in positions:
-            card = _EmotionPortraitCard(
-                emo=emo,
-                n_participants=int(n_per_emotion.get(emo, 0)),
-                top_work=top_works_by_emo.get(emo),
-                top_composer=top_composers_by_emo.get(emo),
-                expected_map=EMOTION_RESEARCH.get(emo, {}).get("expected", {}),
-                actual_map=actual_vals.get(emo, {}),
-            )
-            grid.addWidget(card, row_, col_)
-        grid_wrap = QWidget()
-        grid_wrap.setLayout(grid)
-        root.addWidget(grid_wrap)
+        # Показываем только эмоции, которые встречаются в данных
+        emo_order = ["HVHA", "HVLA", "LVLA", "LVHA"]
+        present_emotions = [e for e in emo_order if n_per_emotion.get(e, 0) > 0]
+        # Добавляем нестандартные эмоции если есть
+        for e in n_per_emotion:
+            if e not in present_emotions and n_per_emotion.get(e, 0) > 0:
+                present_emotions.append(e)
+
+        if present_emotions:
+            grid = QGridLayout()
+            grid.setSpacing(12)
+            grid.setContentsMargins(0, 0, 0, 0)
+            for idx, emo in enumerate(present_emotions):
+                row_ = idx // 2
+                col_ = idx % 2
+                card = _EmotionPortraitCard(
+                    emo=emo,
+                    n_participants=int(n_per_emotion.get(emo, 0)),
+                    top_work=top_works_by_emo.get(emo),
+                    top_composer=top_composers_by_emo.get(emo),
+                    expected_map=EMOTION_RESEARCH.get(emo, {}).get("expected", {}),
+                    actual_map=actual_vals.get(emo, {}),
+                )
+                grid.addWidget(card, row_, col_)
+            grid_wrap = QWidget()
+            grid_wrap.setLayout(grid)
+            root.addWidget(grid_wrap)
+        else:
+            empty_lbl = QLabel("Нет данных об эмоциях.")
+            empty_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; padding:10px;")
+            root.addWidget(empty_lbl)
 
         # ── 5. Radar + Bars side-by-side ──────────────────────────────────
         radar_path = report_dir / "group_radar_chart.png"
@@ -2214,14 +2380,43 @@ class ResultsPage(QWidget):
             except Exception:
                 melody_diag_df = pd.DataFrame()
 
+        _VARIANT_RU = {
+            "original": "Исходный сигнал",
+            "smoothed": "Сглаженный сигнал",
+            "pca": "PCA-сигнал",
+        }
+
         if not melody_diag_df.empty:
-            for _, r in melody_diag_df.iterrows():
+            _variant_order = ["pca", "original", "smoothed"]
+            unique_variants = [v for v in _variant_order if v in melody_diag_df["variant"].values]
+            for other in melody_diag_df["variant"].unique():
+                if other not in unique_variants:
+                    unique_variants.append(other)
+
+            multi_trial = melody_diag_df["variant"].value_counts().max() > 1
+
+            for variant in unique_variants:
+                sub = melody_diag_df[melody_diag_df["variant"] == variant]
+                if multi_trial:
+                    rec_min = float(sub["recording_duration_sec"].mean() or 0.0) / 60.0
+                    melody_sec = float(sub["span_sec"].mean() or 0.0)
+                    note_count = int(round(sub["note_count"].mean()))
+                    silence_ratio = float(sub["silence_ratio"].mean() or 0.0)
+                    label = f"{_VARIANT_RU.get(variant, variant)} (среднее по {len(sub)} триалам)"
+                else:
+                    r = sub.iloc[0]
+                    rec_min = float(r.get("recording_duration_sec", 0.0) or 0.0) / 60.0
+                    melody_sec = float(r.get("span_sec", 0.0) or 0.0)
+                    note_count = int(r.get("note_count", 0) or 0)
+                    silence_ratio = float(r.get("silence_ratio", 0.0) or 0.0)
+                    label = _VARIANT_RU.get(variant, variant)
+
                 root.addWidget(_SignalCoverageBar(
-                    variant=str(r.get("variant", "")),
-                    rec_min=float(r.get("recording_duration_sec", 0.0) or 0.0) / 60.0,
-                    melody_sec=float(r.get("span_sec", 0.0) or 0.0),
-                    note_count=int(r.get("note_count", 0) or 0),
-                    silence_ratio=float(r.get("silence_ratio", 0.0) or 0.0),
+                    variant=label,
+                    rec_min=rec_min,
+                    melody_sec=melody_sec,
+                    note_count=note_count,
+                    silence_ratio=silence_ratio,
                 ))
         else:
             empty = QLabel("Диагностика EEG-мелодии недоступна.")

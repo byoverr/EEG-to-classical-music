@@ -7,12 +7,12 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QDragEnterEvent, QDropEvent, QKeySequence, QShortcut
+from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFileDialog, QListWidget,
     QFrame, QFormLayout, QSpinBox, QDoubleSpinBox,
-    QCheckBox, QAbstractItemView,
+    QCheckBox, QAbstractItemView, QRadioButton, QButtonGroup, QGroupBox,
     QMessageBox, QComboBox, QScrollArea, QSizePolicy,
 )
 
@@ -35,46 +35,28 @@ class _FileDropArea(QFrame):
         root.setContentsMargins(12, 10, 12, 10)
         root.setSpacing(6)
 
-        lbl = QLabel("Перетащите .eeg / .dat файлы сюда или нажмите кнопку. "
-                     "Для удаления — выделите и нажмите Delete / Backspace.")
+        lbl = QLabel("Перетащите .eeg / .dat файлы сюда или нажмите кнопку")
         lbl.setAlignment(Qt.AlignCenter)
-        lbl.setWordWrap(True)
         lbl.setStyleSheet(f"font-size:12px; color:{TEXT_SECONDARY};")
         root.addWidget(lbl)
 
         self._list = QListWidget()
         self._list.setObjectName("fileDrop")
         self._list.setSelectionMode(QAbstractItemView.ExtendedSelection)
-        self._list.setMinimumHeight(120)
-        self._list.setMaximumHeight(180)
+        self._list.setMaximumHeight(100)
         root.addWidget(self._list)
-
-        # Горячие клавиши удаления внутри списка
-        for seq in (QKeySequence.Delete, QKeySequence(Qt.Key_Backspace)):
-            sc = QShortcut(seq, self._list)
-            sc.setContext(Qt.WidgetShortcut)
-            sc.activated.connect(self._remove_selected)
 
         btn_row = QHBoxLayout()
         btn_add = QPushButton("Выбрать файлы")
         btn_add.setObjectName("secondary")
         btn_add.clicked.connect(self._browse)
         btn_row.addWidget(btn_add)
-
-        self._btn_rm = QPushButton("Удалить выбранные")
-        self._btn_rm.setObjectName("secondary")
-        self._btn_rm.setEnabled(False)
-        self._btn_rm.clicked.connect(self._remove_selected)
-        btn_row.addWidget(self._btn_rm)
-
-        btn_clear = QPushButton("Очистить список")
-        btn_clear.setObjectName("link")
-        btn_clear.clicked.connect(self.clear)
-        btn_row.addWidget(btn_clear)
+        btn_rm = QPushButton("Удалить выбранные")
+        btn_rm.setObjectName("link")
+        btn_rm.clicked.connect(self._remove_selected)
+        btn_row.addWidget(btn_rm)
         btn_row.addStretch()
         root.addLayout(btn_row)
-
-        self._list.itemSelectionChanged.connect(self._on_selection_changed)
 
     # ── drag and drop ──
     def dragEnterEvent(self, ev: QDragEnterEvent):
@@ -108,19 +90,14 @@ class _FileDropArea(QFrame):
             self.files_changed.emit()
 
     def _remove_selected(self):
-        selected = self._list.selectedItems()
-        if not selected:
-            return
-        # Собираем строки заранее и сортируем по убыванию,
-        # чтобы takeItem не смещал индексы ниже
-        rows = sorted({self._list.row(it) for it in selected}, reverse=True)
+        # Удаляем с конца, чтобы индексы не сдвигались
+        rows = sorted(
+            {self._list.row(item) for item in self._list.selectedItems()},
+            reverse=True,
+        )
         for row in rows:
             self._list.takeItem(row)
         self.files_changed.emit()
-
-    def _on_selection_changed(self):
-        has = bool(self._list.selectedItems())
-        self._btn_rm.setEnabled(has)
 
     def _all(self) -> set[str]:
         return {self._list.item(i).text() for i in range(self._list.count())}
@@ -155,19 +132,18 @@ class _FileEmotionRow(QFrame):
         lay.addWidget(name_lbl, stretch=1)
 
         self.combo = QComboBox()
-        self.combo.addItem("Авто", "auto")
-        self.combo.addItem("HVHA", "HVHA")
-        self.combo.addItem("HVLA", "HVLA")
-        self.combo.addItem("LVHA", "LVHA")
-        self.combo.addItem("LVLA", "LVLA")
-        self.combo.setFixedWidth(100)
+        self.combo.addItem("Радостный / Возбуждённый (HVHA)", "HVHA")
+        self.combo.addItem("Спокойный / Умиротворённый (HVLA)", "HVLA")
+        self.combo.addItem("Злой / Напряжённый (LVHA)", "LVHA")
+        self.combo.addItem("Грустный / Подавленный (LVLA)", "LVLA")
+        self.combo.setCurrentIndex(1)  # HVLA по умолчанию
+        self.combo.setMinimumWidth(240)
         self.combo.setStyleSheet("border: none;")
         lay.addWidget(self.combo)
 
-    def get_emotion(self) -> str | None:
-        """Возвращает выбранную эмоцию или None для 'auto'."""
-        val = self.combo.currentData()
-        return val if val != "auto" else None
+    def get_emotion(self) -> str:
+        """Возвращает выбранную эмоцию."""
+        return self.combo.currentData()
 
 
 # ── EEG file info card ──────────────────────────────────────────────────────
@@ -236,7 +212,7 @@ class LoadPage(QWidget):
         btn_back.clicked.connect(self.go_back.emit)
         hdr.addWidget(btn_back)
         hdr.addStretch()
-        title = QLabel("Загрузка EEG-файлов и выбор режима анализа")
+        title = QLabel("Загрузка EEG-файлов")
         title.setStyleSheet(f"font-size:20px; font-weight:700; color:{PRIMARY};")
         hdr.addWidget(title)
         hdr.addStretch()
@@ -257,6 +233,24 @@ class LoadPage(QWidget):
         left.addWidget(self._drop)
         self._eeg_info = _EEGInfoCard()
         left.addWidget(self._eeg_info)
+
+        # .dat / DEAP — выбор количества триалов
+        self._dat_trials_frame = QFrame()
+        self._dat_trials_frame.setObjectName("card")
+        self._dat_trials_frame.setVisible(False)
+        dat_lay = QHBoxLayout(self._dat_trials_frame)
+        dat_lay.setContentsMargins(10, 6, 10, 6)
+        dat_lay.setSpacing(8)
+        dat_info_lbl = QLabel("DEAP .dat — количество триалов для анализа:")
+        dat_info_lbl.setStyleSheet(f"font-size:11px; color:{PRIMARY}; font-weight:600;")
+        dat_lay.addWidget(dat_info_lbl)
+        self._spin_trials = QSpinBox()
+        self._spin_trials.setRange(1, 40)
+        self._spin_trials.setValue(5)
+        self._spin_trials.setToolTip("Каждый триал — 63-секундная запись ЭЭГ (всего 40 триалов в файле)")
+        dat_lay.addWidget(self._spin_trials)
+        dat_lay.addStretch()
+        left.addWidget(self._dat_trials_frame)
 
         # Per-file emotion selectors (shown for .eeg files)
         self._emotion_label = QLabel("Эмоции для .eeg файлов:")
@@ -285,76 +279,132 @@ class LoadPage(QWidget):
         form.setSpacing(5)
         form.setLabelAlignment(Qt.AlignRight)
 
-        section_lbl = QLabel("Параметры проверки гипотезы")
-        section_lbl.setStyleSheet(
-            f"font-size:13px; font-weight:600; color:{PRIMARY}; margin-bottom:2px;"
-        )
-        form.addRow(section_lbl)
+        # Счётчики треков по эмоциям (из датасетов, не меняются)
+        self._TRACK_COUNTS = {
+            "emopia": {"HVHA": 250, "HVLA": 265, "LVLA": 253, "LVHA": 310, "total": 1078},
+            "maestro": {"HVHA": 888, "HVLA": 216, "LVLA": 119, "LVHA": 53, "total": 1276},
+        }
+
+        def _sec(text: str) -> QLabel:
+            """Заголовок секции — единый стиль для всей формы."""
+            lbl = QLabel(text)
+            lbl.setStyleSheet(
+                f"font-size:13px; font-weight:600; color:{PRIMARY}; "
+                f"margin-top:8px; margin-bottom:2px;"
+            )
+            return lbl
+
+        form.addRow(_sec("Параметры анализа"))
 
         self._spin_classical = QSpinBox()
-        self._spin_classical.setRange(1, 200)
-        self._spin_classical.setValue(40)
-        self._spin_classical.setToolTip("Ограниченный набор эмоционально размеченной классики")
-        form.addRow("Размер корпуса классики:", self._spin_classical)
+        self._spin_classical.setRange(1, 500)
+        self._spin_classical.setValue(10)
+        self._spin_classical.setToolTip("Сколько произведений случайно отобрать для сравнения с ЭЭГ")
+        form.addRow("Кол-во произведений:", self._spin_classical)
 
         self._spin_topk = QSpinBox()
-        self._spin_topk.setRange(1, 20)
-        self._spin_topk.setValue(5)
-        form.addRow("Top-K в отчете:", self._spin_topk)
+        self._spin_topk.setRange(1, 100)
+        self._spin_topk.setValue(10)
+        self._spin_topk.setToolTip("Сколько наиболее похожих произведений показать в результате")
+        form.addRow("Результатов (топ-N):", self._spin_topk)
 
         self._spin_jobs = QSpinBox()
         self._spin_jobs.setRange(0, 32)
         self._spin_jobs.setValue(0)
         self._spin_jobs.setSpecialValueText("Авто")
-        form.addRow("Процессы:", self._spin_jobs)
+        self._spin_jobs.setToolTip("Число параллельных процессов (0 = определяется автоматически)")
+        form.addRow("Параллельных процессов:", self._spin_jobs)
 
         self._spin_window = QDoubleSpinBox()
         self._spin_window.setRange(1.0, 60.0)
         self._spin_window.setValue(4.0)
         self._spin_window.setSuffix(" сек")
-        form.addRow("Окно фрагмента:", self._spin_window)
+        self._spin_window.setToolTip("Длина скользящего окна для анализа ЭЭГ")
+        form.addRow("Размер окна:", self._spin_window)
 
         self._spin_hop = QDoubleSpinBox()
         self._spin_hop.setRange(0.5, 30.0)
         self._spin_hop.setValue(2.0)
         self._spin_hop.setSuffix(" сек")
-        form.addRow("Шаг фрагмента:", self._spin_hop)
+        self._spin_hop.setToolTip("Шаг сдвига скользящего окна")
+        form.addRow("Шаг окна:", self._spin_hop)
 
         self._spin_max_seconds = QDoubleSpinBox()
         self._spin_max_seconds.setRange(0, 3600.0)
         self._spin_max_seconds.setValue(0)
         self._spin_max_seconds.setSuffix(" сек")
         self._spin_max_seconds.setSpecialValueText("Весь файл")
-        self._spin_max_seconds.setToolTip("Макс. длительность EEG (0 = весь файл)")
-        form.addRow("Макс. длит.:", self._spin_max_seconds)
+        self._spin_max_seconds.setToolTip("Ограничить длину анализируемого ЭЭГ (0 = весь файл)")
+        form.addRow("Макс. длина ЭЭГ:", self._spin_max_seconds)
 
-        self._analysis_mode = QComboBox()
-        self._analysis_mode.addItem("Один EEG", "single")
-        self._analysis_mode.addItem("Группа одной эмоции", "cohort")
-        self._analysis_mode.addItem("Весь набор", "dataset")
-        form.addRow("Режим:", self._analysis_mode)
+        # ── Набор произведений ──────────────────────────────────────────
+        form.addRow(_sec("Набор произведений"))
 
-        # Источник классики: MAESTRO + EMOPIA (по умолчанию) / EMOPIA / MAESTRO
-        self._combo_dataset = QComboBox()
-        self._combo_dataset.addItem("MAESTRO + EMOPIA", "both")
-        self._combo_dataset.addItem("Только EMOPIA", "emopia")
-        self._combo_dataset.addItem("Только MAESTRO", "maestro")
-        self._combo_dataset.setToolTip(
-            "EMOPIA — эмоционально размечен вручную (ground-truth).\n"
-            "MAESTRO — большие классические произведения, эмоции предсказаны моделью.\n"
-            "MAESTRO + EMOPIA — сравнение идёт по обоим датасетам."
-        )
-        form.addRow("Источник классики:", self._combo_dataset)
+        self._corpus_group = QButtonGroup(self)
+        self._radio_both    = QRadioButton("MAESTRO + EMOPIA  (2354 треков)")
+        self._radio_maestro = QRadioButton("Только MAESTRO  (1276 треков)")
+        self._radio_emopia  = QRadioButton("Только EMOPIA  (1078 треков)")
+        self._radio_both.setChecked(True)
+        for idx, rb in enumerate((self._radio_both, self._radio_maestro, self._radio_emopia)):
+            self._corpus_group.addButton(rb, idx)
+            form.addRow(rb)
 
-        self._chk_match = QCheckBox("Учитывать эмоцию в ранжировании")
-        form.addRow(self._chk_match)
+        # ── Режим сравнения ─────────────────────────────────────────────
+        form.addRow(_sec("Режим сравнения"))
 
-        # Seed — для воспроизводимости запусков
-        self._spin_seed = QSpinBox()
-        self._spin_seed.setRange(0, 2_147_483_647)
-        self._spin_seed.setValue(42)
-        self._spin_seed.setToolTip("Seed для random.shuffle и np.random — одинаковый seed ⇒ одинаковые результаты")
-        form.addRow("Seed:", self._spin_seed)
+        self._search_group = QButtonGroup(self)
+        self._radio_search_all  = QRadioButton("Среди всех выбранных произведений")
+        self._radio_search_emo  = QRadioButton("Только среди произведений одной эмоции")
+        self._radio_search_both = QRadioButton("Сравнить оба режима")
+        self._radio_search_all.setChecked(True)
+        for idx, rb in enumerate((self._radio_search_all, self._radio_search_emo, self._radio_search_both)):
+            self._search_group.addButton(rb, idx)
+            form.addRow(rb)
+
+        # Выбор эмоции (появляется только в режимах 1 и 2)
+        self._combo_search_emo = QComboBox()
+        self._combo_search_emo.addItem("Радостный / Возбуждённый (HVHA)", "HVHA")
+        self._combo_search_emo.addItem("Спокойный / Умиротворённый (HVLA)", "HVLA")
+        self._combo_search_emo.addItem("Злой / Напряжённый (LVHA)", "LVHA")
+        self._combo_search_emo.addItem("Грустный / Подавленный (LVLA)", "LVLA")
+        self._combo_search_emo.setEnabled(False)
+        form.addRow("Эмоция:", self._combo_search_emo)
+
+        # Динамическая подпись с количеством доступных треков
+        self._emo_avail_lbl = QLabel()
+        self._emo_avail_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        self._emo_avail_lbl.setVisible(False)
+        form.addRow(self._emo_avail_lbl)
+
+        def _on_search_mode_changed():
+            active = self._radio_search_emo.isChecked() or self._radio_search_both.isChecked()
+            self._combo_search_emo.setEnabled(active)
+            self._update_emo_count()
+
+        self._radio_search_emo.toggled.connect(_on_search_mode_changed)
+        self._radio_search_both.toggled.connect(_on_search_mode_changed)
+        self._combo_search_emo.currentIndexChanged.connect(self._update_emo_count)
+        self._corpus_group.buttonClicked.connect(self._update_emo_count)
+
+        # ── Конкретный MIDI для сравнения ───────────────────────────────
+        form.addRow(_sec("Конкретный MIDI для сравнения"))
+
+        self._manual_midi_path: str | None = None
+        self._manual_midi_lbl = QLabel("не выбран")
+        self._manual_midi_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+        form.addRow(self._manual_midi_lbl)
+
+        midi_btn_row = QHBoxLayout()
+        btn_pick_midi = QPushButton("Выбрать файл…")
+        btn_pick_midi.setObjectName("secondary")
+        btn_pick_midi.clicked.connect(self._pick_manual_midi)
+        midi_btn_row.addWidget(btn_pick_midi)
+        btn_clear_midi = QPushButton("Очистить")
+        btn_clear_midi.setObjectName("link")
+        btn_clear_midi.clicked.connect(self._clear_manual_midi)
+        midi_btn_row.addWidget(btn_clear_midi)
+        midi_btn_row.addStretch()
+        form.addRow(midi_btn_row)
 
         right.addWidget(params_frame)
         right.addStretch()
@@ -375,7 +425,13 @@ class LoadPage(QWidget):
         if not files:
             self._eeg_info.clear_info()
             self._rebuild_emotion_rows([])
+            self._dat_trials_frame.setVisible(False)
             return
+
+        # Показать блок триалов если есть .dat файлы
+        dat_files = [f for f in files if f.lower().endswith(".dat")]
+        self._dat_trials_frame.setVisible(bool(dat_files))
+
         # Rebuild per-file emotion combos for .eeg files
         eeg_files = [f for f in files if f.lower().endswith(".eeg")]
         self._rebuild_emotion_rows(eeg_files)
@@ -422,12 +478,64 @@ class LoadPage(QWidget):
         """Возвращает {filepath: emotion} для каждого .eeg файла."""
         return {row.filepath: row.get_emotion() for row in self._emotion_rows}
 
+    def _update_emo_count(self):
+        """Обновляет подпись с количеством доступных треков при текущем выборе эмоции+набора."""
+        active = self._radio_search_emo.isChecked() or self._radio_search_both.isChecked()
+        if not active:
+            self._emo_avail_lbl.setVisible(False)
+            return
+
+        emo = self._combo_search_emo.currentData()
+        cid = self._corpus_group.checkedId()
+
+        if cid == 0:
+            n_e = self._TRACK_COUNTS["emopia"].get(emo, 0)
+            n_m = self._TRACK_COUNTS["maestro"].get(emo, 0)
+            total = n_e + n_m
+            text = f"Доступно в группе: {total} (EMOPIA: {n_e}, MAESTRO: {n_m})"
+        elif cid == 1:
+            n_m = self._TRACK_COUNTS["maestro"].get(emo, 0)
+            text = f"Доступно в группе: {n_m} треков MAESTRO"
+        else:
+            n_e = self._TRACK_COUNTS["emopia"].get(emo, 0)
+            text = f"Доступно в группе: {n_e} треков EMOPIA"
+
+        self._emo_avail_lbl.setText(text)
+        self._emo_avail_lbl.setVisible(True)
+
+    def _pick_manual_midi(self):
+        """Выбор конкретного MIDI-файла для ручного сравнения."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Выберите MIDI-файл для сравнения",
+            str(Path.home()),
+            "MIDI files (*.mid *.midi);;All Files (*)",
+        )
+        if path:
+            self._manual_midi_path = path
+            name = Path(path).name
+            self._manual_midi_lbl.setText(name)
+            self._manual_midi_lbl.setStyleSheet(f"font-size:11px; color:{ACCENT}; font-weight:600;")
+
+    def _clear_manual_midi(self):
+        self._manual_midi_path = None
+        self._manual_midi_lbl.setText("не выбран")
+        self._manual_midi_lbl.setStyleSheet(f"font-size:11px; color:{TEXT_SECONDARY};")
+
     def _on_start(self):
         files = self._drop.get_files()
         if not files:
             QMessageBox.warning(self, "Нет файлов", "Загрузите хотя бы один файл.")
             return
-        dataset_source = self._combo_dataset.currentData() or "both"
+
+        corpus_id = self._corpus_group.checkedId()
+        only_emopia = (corpus_id == 2)
+        only_maestro = (corpus_id == 1)
+
+        search_id = self._search_group.checkedId()
+        match_by_emotion = search_id in (1, 2)
+        compare_modes = (search_id == 2)
+        target_emotion = self._combo_search_emo.currentData() if match_by_emotion else None
+
         params = {
             "max_classical": self._spin_classical.value(),
             "top_k": self._spin_topk.value(),
@@ -435,54 +543,51 @@ class LoadPage(QWidget):
             "window_size": self._spin_window.value(),
             "hop_size": self._spin_hop.value(),
             "max_seconds": self._spin_max_seconds.value() or None,
-            "dataset_source": dataset_source,
-            # обратная совместимость: worker всё ещё понимает only_emopia
-            "only_emopia": dataset_source == "emopia",
-            "match_emotions": self._chk_match.isChecked(),
-            "analysis_mode": self._analysis_mode.currentData(),
-            "eeg_emotions": self._get_file_emotions(),  # per-file emotions
-            "seed": int(self._spin_seed.value()),
+            "max_trials": self._spin_trials.value(),
+            "only_emopia": only_emopia,
+            "only_maestro": only_maestro,
+            "match_emotions": match_by_emotion,
+            "compare_modes": compare_modes,
+            "target_emotion": target_emotion,
+            "manual_midi_path": self._manual_midi_path,
+            "eeg_emotions": self._get_file_emotions(),
         }
         self.start_analysis.emit(files, params)
+
+    def set_running(self, running: bool):
+        """Блокирует/разблокирует кнопку запуска во время анализа."""
+        if hasattr(self, '_btn_run'):
+            self._btn_run.setEnabled(not running)
+            self._btn_run.setText("Анализ идёт…" if running else "Запустить анализ")
+
+    def apply_params(self, params: dict):
+        """Восстанавливает параметры из предыдущего запуска."""
+        if not params:
+            return
+        if "max_classical" in params and hasattr(self, '_spin_classical'):
+            self._spin_classical.setValue(params["max_classical"])
+        if "top_k" in params and hasattr(self, '_spin_topk'):
+            self._spin_topk.setValue(params["top_k"])
+        if "window_size" in params and hasattr(self, '_spin_window'):
+            self._spin_window.setValue(params["window_size"])
+        if "hop_size" in params and hasattr(self, '_spin_hop'):
+            self._spin_hop.setValue(params["hop_size"])
+        if "max_trials" in params and hasattr(self, '_spin_trials'):
+            self._spin_trials.setValue(params["max_trials"])
+        if params.get("only_emopia") and hasattr(self, '_radio_emopia'):
+            self._radio_emopia.setChecked(True)
+        elif params.get("only_maestro") and hasattr(self, '_radio_maestro'):
+            self._radio_maestro.setChecked(True)
+        elif hasattr(self, '_radio_both'):
+            self._radio_both.setChecked(True)
 
     def reset(self):
         self._drop.clear()
         self._eeg_info.clear_info()
+        self._dat_trials_frame.setVisible(False)
         self._rebuild_emotion_rows([])
-
-    def set_running(self, is_running: bool):
-        """Блокирует кнопку «Запустить анализ», пока идёт прогон."""
-        self._btn_run.setEnabled(not is_running)
-        self._btn_run.setText("Анализ выполняется…" if is_running else "Запустить анализ")
-
-    # ------------------------------------------------------------------
-    # Persist / restore form state (чтобы не сбрасывался при возврате с Results)
-    # ------------------------------------------------------------------
-    def apply_params(self, params: dict):
-        """Восстанавливает значения формы из словаря (игнорируя отсутствующие ключи)."""
-        if not params:
-            return
-        if "max_classical" in params:
-            self._spin_classical.setValue(int(params["max_classical"]))
-        if "top_k" in params:
-            self._spin_topk.setValue(int(params["top_k"]))
-        if "n_jobs" in params:
-            self._spin_jobs.setValue(int(params["n_jobs"] or 0))
-        if "window_size" in params:
-            self._spin_window.setValue(float(params["window_size"]))
-        if "hop_size" in params:
-            self._spin_hop.setValue(float(params["hop_size"]))
-        if "max_seconds" in params:
-            self._spin_max_seconds.setValue(float(params["max_seconds"] or 0))
-        if "dataset_source" in params:
-            idx = self._combo_dataset.findData(params["dataset_source"])
-            if idx >= 0:
-                self._combo_dataset.setCurrentIndex(idx)
-        if "match_emotions" in params:
-            self._chk_match.setChecked(bool(params["match_emotions"]))
-        if "analysis_mode" in params:
-            idx = self._analysis_mode.findData(params["analysis_mode"])
-            if idx >= 0:
-                self._analysis_mode.setCurrentIndex(idx)
-        if "seed" in params and params["seed"] is not None:
-            self._spin_seed.setValue(int(params["seed"]))
+        self._radio_both.setChecked(True)
+        self._radio_search_all.setChecked(True)
+        self._combo_search_emo.setEnabled(False)
+        self._emo_avail_lbl.setVisible(False)
+        self._clear_manual_midi()
