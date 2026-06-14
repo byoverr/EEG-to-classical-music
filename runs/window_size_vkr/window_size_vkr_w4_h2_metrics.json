@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "window_size": 4.0,
+    "hop_size": 2.0,
+    "run_id": "window_size_vkr_w4_h2",
+    "n_results": 140,
+    "n_groups": 10,
+    "mean_music_match_score": 0.7661403458914443,
+    "best_music_match_score": 0.8550871208515203,
+    "mean_top1_music_match": 0.8234818018206924,
+    "emotion_match_rate": 0.2,
+    "macro_f1": 0.19571982281284606,
+    "top_k_accuracy": 0.9,
+    "group_consistency_mean": 0.49999999999999994,
+    "mean_eeg_windows_per_trial": 3.0,
+    "selection_score": 0.43181019939824233
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 140,
+    "n_groups": 10,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.7661403458914443,
+    "best_music_match_score": 0.8550871208515203,
+    "emotion_match_rate": 0.2,
+    "strict_top1_match_rate": 0.0,
+    "macro_f1": 0.19571982281284606,
+    "top_k_accuracy": 0.9,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "maestro|MIDI-UNPROCESSED_19-20_R1_2014_MID--AUDIO_19_R1_2014_wav--2|Ludwig van Beethoven - Sonata No. 32 in C Minor, Op. ",
+        "count": 2
+      },
+      {
+        "work": "emopia|Q1_FfwKrQyQ7WU_0|Dan Musselman - YES AND AMEN | Chris Tomlin | Never Lose Sight (clip 0) [HVHA]",
+        "count": 1
+      },
+      {
+        "work": "emopia|Q4_3TYeU9idRGI_0|Norman Dück - He Saved Me - Emotional relaxing Piano music (clip 0) [LVHA]",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-UNPROCESSED_16-18_R1_2014_MID--AUDIO_18_R1_2014_wav--2|Ludwig van Beethoven - Sonata No. 28 in A Major, Op. ",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_R1_D1-1-8_mid--AUDIO-from_mp3_05_R1_2015_wav--3|Ludwig van Beethoven - Sonata No. 3 in C Major, Op. 2",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Ludwig van Beethoven",
+        "count": 4
+      },
+      {
+        "composer": "Dan Musselman",
+        "count": 1
+      },
+      {
+        "composer": "Norman Dück",
+        "count": 1
+      },
+      {
+        "composer": "Sergei Rachmaninoff",
+        "count": 1
+      },
+      {
+        "composer": "Franz Liszt",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.49999999999999994
+  },
+  "top_composers": [
+    {
+      "composer": "Ludwig van Beethoven",
+      "count": 4
+    },
+    {
+      "composer": "Dan Musselman",
+      "count": 1
+    },
+    {
+      "composer": "Norman Dück",
+      "count": 1
+    },
+    {
+      "composer": "Sergei Rachmaninoff",
+      "count": 1
+    },
+    {
+      "composer": "Franz Liszt",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "maestro|MIDI-UNPROCESSED_19-20_R1_2014_MID--AUDIO_19_R1_2014_wav--2|Ludwig van Beethoven - Sonata No. 32 in C Minor, Op. ",
+      "count": 2
+    },
+    {
+      "work": "emopia|Q1_FfwKrQyQ7WU_0|Dan Musselman - YES AND AMEN | Chris Tomlin | Never Lose Sight (clip 0) [HVHA]",
+      "count": 1
+    },
+    {
+      "work": "emopia|Q4_3TYeU9idRGI_0|Norman Dück - He Saved Me - Emotional relaxing Piano music (clip 0) [LVHA]",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-UNPROCESSED_16-18_R1_2014_MID--AUDIO_18_R1_2014_wav--2|Ludwig van Beethoven - Sonata No. 28 in A Major, Op. ",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_R1_D1-1-8_mid--AUDIO-from_mp3_05_R1_2015_wav--3|Ludwig van Beethoven - Sonata No. 3 in C Major, Op. 2",
+      "count": 1
+    }
+  ]
+}

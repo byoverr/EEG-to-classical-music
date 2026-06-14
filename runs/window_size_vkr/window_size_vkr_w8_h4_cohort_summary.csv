@@ -1,0 +1,5 @@
+eeg_emotion,top_work,top_composer,consistency,n_people,mean_music_match_score
+HVHA,emopia|Q4_yC0fAQxGgr0_1|Olim - Topic - Time (clip 1) [LVHA],Olim - Topic,1.0,1,0.7756947389324905
+HVLA,emopia|Q4_XWk5XUEBXmg_1|Blissful Radiance - Topic - Freefall (clip 1) [LVHA],Blissful Radiance - Topic,0.3333333333333333,3,0.7892175259351418
+LVHA,maestro|MIDI-Unprocessed_21_R1_2006_01-04_ORIG_MID--AUDIO_21_R1_2006_01_Track01_wav|Johann Sebastian Bach / Ferruccio Busoni - Toccata in DMin.,Johann Sebastian Bach / Ferruccio Busoni,0.6666666666666666,3,0.7981177484277625
+LVLA,"maestro|MIDI-Unprocessed_R1_D2-13-20_mid--AUDIO-from_mp3_17_R1_2015_wav--1|Johann Sebastian Bach - Prelude and Fugue in C Major, ",Johann Sebastian Bach,0.3333333333333333,3,0.7905131457908953

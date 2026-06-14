@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "window_size": 12.0,
+    "hop_size": 6.0,
+    "run_id": "window_size_vkr_w12_h6",
+    "n_results": 150,
+    "n_groups": 10,
+    "mean_music_match_score": 0.734974925181124,
+    "best_music_match_score": 0.8060184133826913,
+    "mean_top1_music_match": 0.7809213824843175,
+    "emotion_match_rate": 0.19,
+    "macro_f1": 0.19290106029236465,
+    "top_k_accuracy": 0.8,
+    "group_consistency_mean": 0.49999999999999994,
+    "mean_eeg_windows_per_trial": 4.133333333333334,
+    "selection_score": 0.40179863148959355
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 150,
+    "n_groups": 10,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.734974925181124,
+    "best_music_match_score": 0.8060184133826913,
+    "emotion_match_rate": 0.19,
+    "strict_top1_match_rate": 0.4,
+    "macro_f1": 0.19290106029236465,
+    "top_k_accuracy": 0.8,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "emopia|Q4_v3Nl5rUxLqE_0|Gjermund - Topic - Shy Paws (clip 0) [LVHA]",
+        "count": 2
+      },
+      {
+        "work": "maestro|MIDI-UNPROCESSED_04-07-08-10-12-15-17_R2_2014_MID--AUDIO_08_R2_2014_wav|Franz Schubert - Sonata in A Major, D. 959 (Com",
+        "count": 2
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_07_R1_2006_01-04_ORIG_MID--AUDIO_07_R1_2006_02_Track02_wav|Wolfgang Amadeus Mozart - Fantasy in C Min",
+        "count": 1
+      },
+      {
+        "work": "maestro|ORIG-MIDI_03_7_10_13_Group_MID--AUDIO_17_R3_2013_wav--3|Johannes Brahms - Six Pieces for Piano, Op. 118",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_15_R1_2009_03-06_ORIG_MID--AUDIO_15_R1_2009_15_R1_2009_03_WAV|Claude Debussy - Images, Book I",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Gjermund - Topic",
+        "count": 2
+      },
+      {
+        "composer": "Franz Schubert",
+        "count": 2
+      },
+      {
+        "composer": "Johannes Brahms",
+        "count": 2
+      },
+      {
+        "composer": "Wolfgang Amadeus Mozart",
+        "count": 1
+      },
+      {
+        "composer": "Claude Debussy",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.49999999999999994
+  },
+  "top_composers": [
+    {
+      "composer": "Gjermund - Topic",
+      "count": 2
+    },
+    {
+      "composer": "Franz Schubert",
+      "count": 2
+    },
+    {
+      "composer": "Johannes Brahms",
+      "count": 2
+    },
+    {
+      "composer": "Wolfgang Amadeus Mozart",
+      "count": 1
+    },
+    {
+      "composer": "Claude Debussy",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "emopia|Q4_v3Nl5rUxLqE_0|Gjermund - Topic - Shy Paws (clip 0) [LVHA]",
+      "count": 2
+    },
+    {
+      "work": "maestro|MIDI-UNPROCESSED_04-07-08-10-12-15-17_R2_2014_MID--AUDIO_08_R2_2014_wav|Franz Schubert - Sonata in A Major, D. 959 (Com",
+      "count": 2
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_07_R1_2006_01-04_ORIG_MID--AUDIO_07_R1_2006_02_Track02_wav|Wolfgang Amadeus Mozart - Fantasy in C Min",
+      "count": 1
+    },
+    {
+      "work": "maestro|ORIG-MIDI_03_7_10_13_Group_MID--AUDIO_17_R3_2013_wav--3|Johannes Brahms - Six Pieces for Piano, Op. 118",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_15_R1_2009_03-06_ORIG_MID--AUDIO_15_R1_2009_15_R1_2009_03_WAV|Claude Debussy - Images, Book I",
+      "count": 1
+    }
+  ]
+}

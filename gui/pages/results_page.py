@@ -2255,22 +2255,6 @@ class ResultsPage(QWidget):
             empty_lbl.setStyleSheet(f"color:{TEXT_SECONDARY}; padding:10px;")
             root.addWidget(empty_lbl)
 
-        # ── 5. Radar + Bars side-by-side ──────────────────────────────────
-        radar_path = report_dir / "group_radar_chart.png"
-        bars_path = report_dir / "group_feature_bars.png"
-        if radar_path.exists() or bars_path.exists():
-            charts_row = QHBoxLayout()
-            charts_row.setSpacing(12)
-            if radar_path.exists():
-                charts_row.addWidget(_image_card(
-                    "Радар признаков", radar_path, "Радар не найден"
-                ), stretch=1)
-            if bars_path.exists():
-                charts_row.addWidget(_image_card(
-                    "Наиболее различающиеся признаки", bars_path, "Bar chart не найден"
-                ), stretch=1)
-            root.addLayout(charts_row)
-
         root.addStretch()
         return widget
 

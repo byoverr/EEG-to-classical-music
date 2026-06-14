@@ -1,0 +1,5 @@
+eeg_emotion,top_work,top_composer,consistency,n_people,mean_music_match_score
+HVHA,"maestro|MIDI-Unprocessed_19_R1_2011_MID--AUDIO_R1-D7_12_Track12_wav|Johann Sebastian Bach - Prelude and Fugue in A Minor, ",Johann Sebastian Bach,1.0,1,0.8545718916480549
+HVLA,maestro|MIDI-Unprocessed_Recital5-7_MID--AUDIO_05_R1_2018_wav--2|Johannes Brahms - Variations and Fugue on the th,Johannes Brahms,0.3333333333333333,3,0.8141970342858688
+LVHA,"maestro|MIDI-Unprocessed_Schubert1-3_MID--AUDIO_05_R2_2018_wav|Franz Schubert - Sonata in C Minor, D958",Franz Schubert,0.3333333333333333,3,0.8120023166097458
+LVLA,"maestro|MIDI-Unprocessed_19_R2_2009_01_ORIG_MID--AUDIO_19_R2_2009_19_R2_2009_02_WAV|Franz Schubert - Sonata in G Major, D. 895",Franz Schubert,0.3333333333333333,3,0.8357670546436381

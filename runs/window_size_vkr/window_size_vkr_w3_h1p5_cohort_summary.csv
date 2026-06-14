@@ -1,0 +1,4 @@
+eeg_emotion,top_work,top_composer,consistency,n_people,mean_music_match_score
+HVLA,maestro|MIDI-Unprocessed_19_R1_2006_01-07_ORIG_MID--AUDIO_19_R1_2006_01_Track01_wav|Johann Sebastian Bach - Prelude & Fugue,Johann Sebastian Bach,0.3333333333333333,3,0.8076123127717488
+LVHA,maestro|MIDI-Unprocessed_19_R1_2006_01-07_ORIG_MID--AUDIO_19_R1_2006_01_Track01_wav|Johann Sebastian Bach - Prelude & Fugue,Johann Sebastian Bach,1.0,3,0.8055504649566473
+LVLA,maestro|MIDI-Unprocessed_19_R1_2006_01-07_ORIG_MID--AUDIO_19_R1_2006_01_Track01_wav|Johann Sebastian Bach - Prelude & Fugue,Johann Sebastian Bach,0.3333333333333333,3,0.8079615514314454

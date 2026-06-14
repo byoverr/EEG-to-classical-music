@@ -1,0 +1,77 @@
+{
+  "model_name": "stacked_v4_40dim",
+  "seed": 42,
+  "emopia_stats": {
+    "n_samples": 1078,
+    "n_groups": 381,
+    "clips_per_group": 2.8293963254593177,
+    "class_counts": {
+      "HVHA": 250,
+      "HVLA": 265,
+      "LVHA": 310,
+      "LVLA": 253
+    }
+  },
+  "cv_stratified": null,
+  "cv_grouped_by_youtube_id": {
+    "accuracy_mean": 0.6633074935400517,
+    "accuracy_std": 0.05036410509382336,
+    "balanced_accuracy_mean": 0.6629145282985162,
+    "balanced_accuracy_std": 0.04256620215245373,
+    "macro_f1_mean": 0.6603325859452992,
+    "macro_f1_std": 0.04098261269231904,
+    "kappa_mean": 0.5434565193982219,
+    "kappa_std": 0.06545570196857801
+  },
+  "cv_grouped_confusion": {
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVLA",
+      "LVHA"
+    ],
+    "matrix": [
+      [
+        176,
+        49,
+        12,
+        13
+      ],
+      [
+        54,
+        182,
+        20,
+        9
+      ],
+      [
+        10,
+        14,
+        157,
+        72
+      ],
+      [
+        18,
+        6,
+        86,
+        200
+      ]
+    ]
+  },
+  "maestro_distribution": {
+    "n": 1276,
+    "classes": {
+      "HVHA": 888,
+      "HVLA": 216,
+      "LVHA": 53,
+      "LVLA": 119
+    }
+  },
+  "maestro_confidence": {
+    "mean": 0.6376037941080788,
+    "std": 0.14557313042062817,
+    "median": 0.6466155682375936,
+    "p10": 0.44006649369684625,
+    "p90": 0.8198722784536692,
+    "high_conf_ratio": 0.6018808777429467
+  }
+}

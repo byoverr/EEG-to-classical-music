@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "window_size": 8.0,
+    "hop_size": 4.0,
+    "run_id": "window_size_vkr_w8_h4",
+    "n_results": 150,
+    "n_groups": 10,
+    "mean_music_match_score": 0.7463514854930162,
+    "best_music_match_score": 0.8152666801456951,
+    "mean_top1_music_match": 0.790923999939389,
+    "emotion_match_rate": 0.16,
+    "macro_f1": 0.15584156140662989,
+    "top_k_accuracy": 0.8,
+    "group_consistency_mean": 0.5833333333333334,
+    "mean_eeg_windows_per_trial": 4.266666666666667,
+    "selection_score": 0.38097522455356037
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 150,
+    "n_groups": 10,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.7463514854930162,
+    "best_music_match_score": 0.8152666801456951,
+    "emotion_match_rate": 0.16,
+    "strict_top1_match_rate": 0.0,
+    "macro_f1": 0.15584156140662989,
+    "top_k_accuracy": 0.8,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "maestro|MIDI-Unprocessed_21_R1_2006_01-04_ORIG_MID--AUDIO_21_R1_2006_01_Track01_wav|Johann Sebastian Bach / Ferruccio Busoni - Toccata in DMin.",
+        "count": 3
+      },
+      {
+        "work": "maestro|MIDI-UNPROCESSED_21-22_R1_2014_MID--AUDIO_21_R1_2014_wav--1|Edvard Grieg - Lyric Piece in A Minor, “Waltz",
+        "count": 1
+      },
+      {
+        "work": "emopia|Q4_XWk5XUEBXmg_1|Blissful Radiance - Topic - Freefall (clip 1) [LVHA]",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_R1_D2-13-20_mid--AUDIO-from_mp3_17_R1_2015_wav--1|Johann Sebastian Bach - Prelude and Fugue in C Major, ",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_048_PIANO048_MID--AUDIO-split_07-06-17_Piano-e_2-05_wav--2|Ludwig van Beethoven - Sonata No. 21, Op. 53, \"Waldst",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Johann Sebastian Bach / Ferruccio Busoni",
+        "count": 3
+      },
+      {
+        "composer": "Johann Sebastian Bach",
+        "count": 2
+      },
+      {
+        "composer": "Edvard Grieg",
+        "count": 1
+      },
+      {
+        "composer": "Blissful Radiance - Topic",
+        "count": 1
+      },
+      {
+        "composer": "Ludwig van Beethoven",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.5833333333333334
+  },
+  "top_composers": [
+    {
+      "composer": "Johann Sebastian Bach / Ferruccio Busoni",
+      "count": 3
+    },
+    {
+      "composer": "Johann Sebastian Bach",
+      "count": 2
+    },
+    {
+      "composer": "Edvard Grieg",
+      "count": 1
+    },
+    {
+      "composer": "Blissful Radiance - Topic",
+      "count": 1
+    },
+    {
+      "composer": "Ludwig van Beethoven",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "maestro|MIDI-Unprocessed_21_R1_2006_01-04_ORIG_MID--AUDIO_21_R1_2006_01_Track01_wav|Johann Sebastian Bach / Ferruccio Busoni - Toccata in DMin.",
+      "count": 3
+    },
+    {
+      "work": "maestro|MIDI-UNPROCESSED_21-22_R1_2014_MID--AUDIO_21_R1_2014_wav--1|Edvard Grieg - Lyric Piece in A Minor, “Waltz",
+      "count": 1
+    },
+    {
+      "work": "emopia|Q4_XWk5XUEBXmg_1|Blissful Radiance - Topic - Freefall (clip 1) [LVHA]",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_R1_D2-13-20_mid--AUDIO-from_mp3_17_R1_2015_wav--1|Johann Sebastian Bach - Prelude and Fugue in C Major, ",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_048_PIANO048_MID--AUDIO-split_07-06-17_Piano-e_2-05_wav--2|Ludwig van Beethoven - Sonata No. 21, Op. 53, \"Waldst",
+      "count": 1
+    }
+  ]
+}
