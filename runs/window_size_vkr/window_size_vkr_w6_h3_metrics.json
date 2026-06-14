@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "window_size": 6.0,
+    "hop_size": 3.0,
+    "run_id": "window_size_vkr_w6_h3",
+    "n_results": 150,
+    "n_groups": 10,
+    "mean_music_match_score": 0.7601917698893669,
+    "best_music_match_score": 0.8586578273953573,
+    "mean_top1_music_match": 0.8240471108265813,
+    "emotion_match_rate": 0.14,
+    "macro_f1": 0.1321454678362573,
+    "top_k_accuracy": 0.6,
+    "group_consistency_mean": 0.49999999999999994,
+    "mean_eeg_windows_per_trial": 3.9,
+    "selection_score": 0.3314652537584901
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 150,
+    "n_groups": 10,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.7601917698893669,
+    "best_music_match_score": 0.8586578273953573,
+    "emotion_match_rate": 0.14,
+    "strict_top1_match_rate": 0.2,
+    "macro_f1": 0.1321454678362573,
+    "top_k_accuracy": 0.6,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "maestro|MIDI-Unprocessed_Recital5-7_MID--AUDIO_05_R1_2018_wav--2|Johannes Brahms - Variations and Fugue on the th",
+        "count": 2
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_19_R2_2009_01_ORIG_MID--AUDIO_19_R2_2009_19_R2_2009_02_WAV|Franz Schubert - Sonata in G Major, D. 895",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_19_R1_2011_MID--AUDIO_R1-D7_12_Track12_wav|Johann Sebastian Bach - Prelude and Fugue in A Minor, ",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_R2_D1-2-3-6-7-8-11_mid--AUDIO-from_mp3_07_R2_2015_wav--2|Felix Mendelssohn - Variations Serieuses, Op. 54",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_12_R1_2009_01-02_ORIG_MID--AUDIO_12_R1_2009_12_R1_2009_01_WAV|George Frideric Handel - Suite No. 3 in D Minor",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Franz Schubert",
+        "count": 2
+      },
+      {
+        "composer": "Johannes Brahms",
+        "count": 2
+      },
+      {
+        "composer": "Johann Sebastian Bach",
+        "count": 1
+      },
+      {
+        "composer": "Felix Mendelssohn",
+        "count": 1
+      },
+      {
+        "composer": "George Frideric Handel",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.49999999999999994
+  },
+  "top_composers": [
+    {
+      "composer": "Franz Schubert",
+      "count": 2
+    },
+    {
+      "composer": "Johannes Brahms",
+      "count": 2
+    },
+    {
+      "composer": "Johann Sebastian Bach",
+      "count": 1
+    },
+    {
+      "composer": "Felix Mendelssohn",
+      "count": 1
+    },
+    {
+      "composer": "George Frideric Handel",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "maestro|MIDI-Unprocessed_Recital5-7_MID--AUDIO_05_R1_2018_wav--2|Johannes Brahms - Variations and Fugue on the th",
+      "count": 2
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_19_R2_2009_01_ORIG_MID--AUDIO_19_R2_2009_19_R2_2009_02_WAV|Franz Schubert - Sonata in G Major, D. 895",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_19_R1_2011_MID--AUDIO_R1-D7_12_Track12_wav|Johann Sebastian Bach - Prelude and Fugue in A Minor, ",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_R2_D1-2-3-6-7-8-11_mid--AUDIO-from_mp3_07_R2_2015_wav--2|Felix Mendelssohn - Variations Serieuses, Op. 54",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_12_R1_2009_01-02_ORIG_MID--AUDIO_12_R1_2009_12_R1_2009_01_WAV|George Frideric Handel - Suite No. 3 in D Minor",
+      "count": 1
+    }
+  ]
+}

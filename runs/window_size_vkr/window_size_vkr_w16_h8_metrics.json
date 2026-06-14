@@ -1,0 +1,125 @@
+{
+  "summary": {
+    "window_size": 16.0,
+    "hop_size": 8.0,
+    "run_id": "window_size_vkr_w16_h8",
+    "n_results": 150,
+    "n_groups": 10,
+    "mean_music_match_score": 0.7161525767410145,
+    "best_music_match_score": 0.8062970231503923,
+    "mean_top1_music_match": 0.7699857529192157,
+    "emotion_match_rate": 0.13,
+    "macro_f1": 0.11862745098039215,
+    "top_k_accuracy": 0.5,
+    "group_consistency_mean": 0.49999999999999994,
+    "mean_eeg_windows_per_trial": 4.533333333333333,
+    "selection_score": 0.29544884333003923
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 150,
+    "n_groups": 10,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.7161525767410145,
+    "best_music_match_score": 0.8062970231503923,
+    "emotion_match_rate": 0.13,
+    "strict_top1_match_rate": 0.1,
+    "macro_f1": 0.11862745098039215,
+    "top_k_accuracy": 0.5,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "maestro|MIDI-Unprocessed_23_R1_2006_01-05_ORIG_MID--AUDIO_23_R1_2006_04_Track04_wav|Robert Schumann - Kreisleriana",
+        "count": 3
+      },
+      {
+        "work": "emopia|Q3_Oku8sIpTMAE_0|Chad Lawson - Topic - Hidden Beneath (clip 0) [LVLA]",
+        "count": 1
+      },
+      {
+        "work": "maestro|ORIG-MIDI_02_7_10_13_Group_MID--AUDIO_11_R3_2013_wav--1|Felix Mendelssohn - Variations Serieuses, Op. 54",
+        "count": 1
+      },
+      {
+        "work": "emopia|Q4_v3Nl5rUxLqE_0|Gjermund - Topic - Shy Paws (clip 0) [LVHA]",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_06_R1_2009_03-07_ORIG_MID--AUDIO_06_R1_2009_06_R1_2009_04_WAV|Johann Sebastian Bach - Duet in G, BWV 804",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Robert Schumann",
+        "count": 3
+      },
+      {
+        "composer": "Johann Sebastian Bach",
+        "count": 2
+      },
+      {
+        "composer": "Chad Lawson - Topic",
+        "count": 1
+      },
+      {
+        "composer": "Felix Mendelssohn",
+        "count": 1
+      },
+      {
+        "composer": "Gjermund - Topic",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.49999999999999994
+  },
+  "top_composers": [
+    {
+      "composer": "Robert Schumann",
+      "count": 3
+    },
+    {
+      "composer": "Johann Sebastian Bach",
+      "count": 2
+    },
+    {
+      "composer": "Chad Lawson - Topic",
+      "count": 1
+    },
+    {
+      "composer": "Felix Mendelssohn",
+      "count": 1
+    },
+    {
+      "composer": "Gjermund - Topic",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "maestro|MIDI-Unprocessed_23_R1_2006_01-05_ORIG_MID--AUDIO_23_R1_2006_04_Track04_wav|Robert Schumann - Kreisleriana",
+      "count": 3
+    },
+    {
+      "work": "emopia|Q3_Oku8sIpTMAE_0|Chad Lawson - Topic - Hidden Beneath (clip 0) [LVLA]",
+      "count": 1
+    },
+    {
+      "work": "maestro|ORIG-MIDI_02_7_10_13_Group_MID--AUDIO_11_R3_2013_wav--1|Felix Mendelssohn - Variations Serieuses, Op. 54",
+      "count": 1
+    },
+    {
+      "work": "emopia|Q4_v3Nl5rUxLqE_0|Gjermund - Topic - Shy Paws (clip 0) [LVHA]",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_06_R1_2009_03-07_ORIG_MID--AUDIO_06_R1_2009_06_R1_2009_04_WAV|Johann Sebastian Bach - Duet in G, BWV 804",
+      "count": 1
+    }
+  ]
+}

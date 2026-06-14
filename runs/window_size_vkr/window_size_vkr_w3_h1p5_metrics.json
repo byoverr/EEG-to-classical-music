@@ -1,0 +1,109 @@
+{
+  "summary": {
+    "window_size": 3.0,
+    "hop_size": 1.5,
+    "run_id": "window_size_vkr_w3_h1p5",
+    "n_results": 55,
+    "n_groups": 9,
+    "mean_music_match_score": 0.7748489127758231,
+    "best_music_match_score": 0.8365331704433305,
+    "mean_top1_music_match": 0.8070414430532806,
+    "emotion_match_rate": 0.41818181818181815,
+    "macro_f1": 0.3225650615552439,
+    "top_k_accuracy": 0.8888888888888888,
+    "group_consistency_mean": 0.5555555555555555,
+    "mean_eeg_windows_per_trial": 3.909090909090909,
+    "selection_score": 0.5324054734033219
+  },
+  "pipeline_metrics": {
+    "analysis_mode": "window_experiment",
+    "n_results": 55,
+    "n_groups": 9,
+    "primary_ranking": "music_match_score",
+    "mean_music_match_score": 0.7748489127758231,
+    "best_music_match_score": 0.8365331704433305,
+    "emotion_match_rate": 0.41818181818181815,
+    "strict_top1_match_rate": 0.3333333333333333,
+    "macro_f1": 0.3225650615552439,
+    "top_k_accuracy": 0.8888888888888888,
+    "labels": [
+      "HVHA",
+      "HVLA",
+      "LVHA",
+      "LVLA"
+    ],
+    "top_works": [
+      {
+        "work": "maestro|MIDI-Unprocessed_19_R1_2006_01-07_ORIG_MID--AUDIO_19_R1_2006_01_Track01_wav|Johann Sebastian Bach - Prelude & Fugue",
+        "count": 5
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_Chamber4_MID--AUDIO_11_R3_2018_wav--1|Johann Sebastian Bach - Partita No. 4 in D Major, BWV ",
+        "count": 1
+      },
+      {
+        "work": "maestro|ORIG-MIDI_02_7_8_13_Group__MID--AUDIO_12_R2_2013_wav--1|Johann Sebastian Bach - Partita No. 2 in C Minor, I. S",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_14_R1_2006_01-05_ORIG_MID--AUDIO_14_R1_2006_04_Track04_wav|Sergei Rachmaninoff - Prelude Op. 32/5",
+        "count": 1
+      },
+      {
+        "work": "maestro|MIDI-Unprocessed_10_R2_2009_01_ORIG_MID--AUDIO_10_R2_2009_10_R2_2009_01_WAV|Franz Schubert - Sonata in B-flat Major, D. 960",
+        "count": 1
+      }
+    ],
+    "top_composers": [
+      {
+        "composer": "Johann Sebastian Bach",
+        "count": 7
+      },
+      {
+        "composer": "Sergei Rachmaninoff",
+        "count": 1
+      },
+      {
+        "composer": "Franz Schubert",
+        "count": 1
+      }
+    ],
+    "group_consistency_mean": 0.5555555555555555
+  },
+  "top_composers": [
+    {
+      "composer": "Johann Sebastian Bach",
+      "count": 7
+    },
+    {
+      "composer": "Sergei Rachmaninoff",
+      "count": 1
+    },
+    {
+      "composer": "Franz Schubert",
+      "count": 1
+    }
+  ],
+  "top_works": [
+    {
+      "work": "maestro|MIDI-Unprocessed_19_R1_2006_01-07_ORIG_MID--AUDIO_19_R1_2006_01_Track01_wav|Johann Sebastian Bach - Prelude & Fugue",
+      "count": 5
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_Chamber4_MID--AUDIO_11_R3_2018_wav--1|Johann Sebastian Bach - Partita No. 4 in D Major, BWV ",
+      "count": 1
+    },
+    {
+      "work": "maestro|ORIG-MIDI_02_7_8_13_Group__MID--AUDIO_12_R2_2013_wav--1|Johann Sebastian Bach - Partita No. 2 in C Minor, I. S",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_14_R1_2006_01-05_ORIG_MID--AUDIO_14_R1_2006_04_Track04_wav|Sergei Rachmaninoff - Prelude Op. 32/5",
+      "count": 1
+    },
+    {
+      "work": "maestro|MIDI-Unprocessed_10_R2_2009_01_ORIG_MID--AUDIO_10_R2_2009_10_R2_2009_01_WAV|Franz Schubert - Sonata in B-flat Major, D. 960",
+      "count": 1
+    }
+  ]
+}
